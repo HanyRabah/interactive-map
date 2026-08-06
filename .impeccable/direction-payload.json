@@ -1,0 +1,46 @@
+{
+  "title": "Choose the visual world for the DP Interactive rebuild",
+  "question": "The roll assigned Coastal Travel Editorial. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Coastal Travel Editorial",
+      "kicker": "THE ROLL",
+      "lineage": "Luxury coffee-table travel & hospitality publishing — Cereal, Condé Nast Traveler property spreads, Aman/Six Senses brand books",
+      "thesis": "The development as a beautifully art-directed property spread that happens to be fully interactive and three-dimensional.",
+      "palette": ["#F4EDE1", "#0F3D3E", "#C1622D", "#B08D57"],
+      "materials": ["full-bleed real aerial photography/video", "gold-foil stamped captions", "printed-plate figure labels"],
+      "viewport": "A full-bleed cinematic aerial hero of the Ghazala Bay coastline, a masthead-style serif title (“Zoya — Ghazala Bay”) fading in like a magazine cover line, one gold-foil caption plate naming the view; the globe-to-region-to-project camera move plays like turning a spread rather than a generic zoom.",
+      "risk": "Reads like a static brochure if editorial restraint isn't paired with continuous camera motion and real interactivity — motion and depth have to carry as much weight as the photography."
+    },
+    {
+      "id": "challenger-ticket-wallet",
+      "label": "Jet-Age Ticket Wallet",
+      "lineage": "vernacular ephemera — mid-century airline ticket wallets, carbon-copy coupons, route maps",
+      "thesis": "The layered journey (location → masterplan → building → unit) staged as a coupon book: each stage a leg you tear off in sequence.",
+      "case": "Fuses cleanly with the journey's staged structure and its travel/aspiration register suits a coastal vacation property — but its coupon model is literally irreversible (“used = void”), which fights a product that needs free, repeated exploration. Loses on product clarity."
+    },
+    {
+      "id": "challenger-darkroom",
+      "label": "Darkroom Safelight Bay",
+      "lineage": "signals & instruments — amber-lit photographic darkroom, timed development baths",
+      "thesis": "Construction progress and before/after staged as a photograph slowly developing under amber safelight.",
+      "case": "Beautiful, specific fit for the Compare/Progress feature alone — the ‘image emerging from nothing’ reveal is worth stealing as a transition detail. But its fixed, linear station sequence and moody near-black palette can't carry free map navigation, filters, or a luxury-aspirational register across the whole surface. Loses on product clarity at full scale."
+    },
+    {
+      "id": "challenger-shader-portal",
+      "label": "WebGL Shader Portal",
+      "lineage": "experiential-studio web design — full-screen fragment-shader scenes, thin type over living pixels",
+      "thesis": "A living, breathing full-screen shader field with the interface floating as thin type over it — the literal ‘modern tech, wow effect’ read.",
+      "case": "Delivers spectacle and real web leverage, but an abstract color field can't carry real aerial photography, a real 3D masterplan, or real construction photos as substance — it becomes decoration the product's actual content has to fight through. Loses on product clarity; also the closest of the six to the generic AI-interface calibration risk (dark ground, single neon accent)."
+    }
+  ],
+  "reroll": true,
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "The interactive-masterplan category default, executed at full craft: a tidy map-plus-sidebar layout, translucent glass info panels, blue accent, clean sans UI over the map canvas.",
+    "viewport": "Filters left, 3D map center, glass panel slides in on selection with blue-accented buttons and icons — the PropTech-dashboard look most competitors ship."
+  },
+  "steer": true
+}
