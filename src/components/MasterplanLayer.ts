@@ -20,7 +20,13 @@ export type MasterplanParams = {
   offsetUp: number;
 };
 
-export const DEFAULT_MASTERPLAN_PARAMS: MasterplanParams = { scale: 1, rotationDeg: 0, offsetE: 0, offsetN: 0, offsetUp: 0 };
+export const DEFAULT_MASTERPLAN_PARAMS: MasterplanParams = {
+  scale: 1,
+  rotationDeg: 0,
+  offsetE: 0,
+  offsetN: 0,
+  offsetUp: 0,
+};
 
 /** A real named mesh/group from the GLB whose name matched /building/i — never invented data. */
 export type MasterplanBuilding = {
@@ -55,7 +61,13 @@ function materialFor(name: string): THREE.Material {
   let key: string;
   if (n.includes("asphalt") || n.includes("curb")) key = "road";
   else if (n.includes("glass")) key = "glass";
-  else if (n.includes("forest") || n.includes("tropical") || n.includes("ground cover") || n.includes("cocos") || n.includes("plant"))
+  else if (
+    n.includes("forest") ||
+    n.includes("tropical") ||
+    n.includes("ground cover") ||
+    n.includes("cocos") ||
+    n.includes("plant")
+  )
     key = "vegetation";
   else key = "building";
 
@@ -64,12 +76,30 @@ function materialFor(name: string): THREE.Material {
 
   const material =
     key === "road"
-      ? new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.95, metalness: 0 })
+      ? new THREE.MeshStandardMaterial({
+          color: 0x3a3a3e,
+          roughness: 0.95,
+          metalness: 0,
+        })
       : key === "glass"
-        ? new THREE.MeshStandardMaterial({ color: 0xa8d8e8, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.55 })
+        ? new THREE.MeshStandardMaterial({
+            color: 0xa8d8e8,
+            roughness: 0.1,
+            metalness: 0.3,
+            transparent: true,
+            opacity: 0.55,
+          })
         : key === "vegetation"
-          ? new THREE.MeshStandardMaterial({ color: 0x4a7c3f, roughness: 0.9, metalness: 0 })
-          : new THREE.MeshStandardMaterial({ color: 0xe4dcc8, roughness: 0.8, metalness: 0.02 });
+          ? new THREE.MeshStandardMaterial({
+              color: 0x4a7c3f,
+              roughness: 0.9,
+              metalness: 0,
+            })
+          : new THREE.MeshStandardMaterial({
+              color: 0xe4dcc8,
+              roughness: 0.8,
+              metalness: 0.02,
+            });
 
   materialCache.set(key, material);
   return material;
@@ -86,9 +116,16 @@ export function createMasterplanLayer(
   altitude = 0,
   model?: MasterplanModel,
   initialParams: MasterplanParams = DEFAULT_MASTERPLAN_PARAMS,
-  onModelLoaded?: (footprint: { width: number; depth: number }, buildings: MasterplanBuilding[]) => void
+  onModelLoaded?: (
+    footprint: { width: number; depth: number },
+    buildings: MasterplanBuilding[],
+  ) => void,
+  onProgress?: (fraction: number) => void,
 ): MasterplanLayer {
-  const modelTransform = mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], altitude);
+  const modelTransform = mapboxgl.MercatorCoordinate.fromLngLat(
+    [lng, lat],
+    altitude,
+  );
   const mercatorScale = modelTransform.meterInMercatorCoordinateUnits();
 
   let camera: THREE.Camera;
@@ -109,7 +146,11 @@ export function createMasterplanLayer(
   function applySunElevation(elevationDeg: number) {
     if (!sun || !fill || !hemi) return;
     const t = Math.max(0, Math.min(90, elevationDeg)) / 90;
-    sun.color.copy(t < 1 / 6 ? NIGHT_SUN.clone().lerp(DAWN_SUN, t / (1 / 6)) : DAWN_SUN.clone().lerp(DAY_SUN, (t - 1 / 6) / (5 / 6)));
+    sun.color.copy(
+      t < 1 / 6
+        ? NIGHT_SUN.clone().lerp(DAWN_SUN, t / (1 / 6))
+        : DAWN_SUN.clone().lerp(DAY_SUN, (t - 1 / 6) / (5 / 6)),
+    );
     sun.intensity = 0.12 + t * 1.03;
     fill.intensity = 0.05 + t * 0.3;
     hemi.color.copy(NIGHT_SKY.clone().lerp(DAY_SKY, t));
@@ -156,46 +197,61 @@ export function createMasterplanLayer(
         // satellite imagery — use the live calibration panel to tune them per project.
         const loader = new GLTFLoader();
         loader.setDRACOLoader(dracoLoader);
-        loader.load(model.url, (gltf) => {
-          const root = gltf.scene;
+        loader.load(
+          model.url,
+          (gltf) => {
+            const root = gltf.scene;
 
-          // Collect real building nodes by name before recentering (see below) — first
-          // match per unique name wins, since a parent "Building A" group's descendants
-          // often repeat "Building A" in their own names and would otherwise double-count.
-          const seenNames = new Set<string>();
-          const rawBuildings: MasterplanBuilding[] = [];
-          root.traverse((obj) => {
-            if (obj instanceof THREE.Mesh) obj.material = materialFor(obj.name);
-            if (/building/i.test(obj.name) && !seenNames.has(obj.name)) {
-              seenNames.add(obj.name);
-              const bbox = new THREE.Box3().setFromObject(obj);
-              if (!bbox.isEmpty()) {
-                const c = bbox.getCenter(new THREE.Vector3());
-                rawBuildings.push({ name: obj.name, localCenter: [c.x, c.y, c.z] });
+            // Collect real building nodes by name before recentering (see below) — first
+            // match per unique name wins, since a parent "Building A" group's descendants
+            // often repeat "Building A" in their own names and would otherwise double-count.
+            const seenNames = new Set<string>();
+            const rawBuildings: MasterplanBuilding[] = [];
+            root.traverse((obj) => {
+              if (obj instanceof THREE.Mesh)
+                obj.material = materialFor(obj.name);
+              if (/building/i.test(obj.name) && !seenNames.has(obj.name)) {
+                seenNames.add(obj.name);
+                const bbox = new THREE.Box3().setFromObject(obj);
+                if (!bbox.isEmpty()) {
+                  const c = bbox.getCenter(new THREE.Vector3());
+                  rawBuildings.push({
+                    name: obj.name,
+                    localCenter: [c.x, c.y, c.z],
+                  });
+                }
               }
-            }
-          });
+            });
 
-          const box = new THREE.Box3().setFromObject(root);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const buildings: MasterplanBuilding[] = rawBuildings.map((b) => ({
-            name: b.name,
-            localCenter: [b.localCenter[0] - center.x, b.localCenter[1], b.localCenter[2] - center.z],
-          }));
-          onModelLoaded?.({ width: size.x, depth: size.z }, buildings);
-          // Recenter horizontally on the footprint only. Do NOT auto-rest box.min.y at
-          // ground: a single outlier low vertex (stray geometry, a dipped terrain patch)
-          // drags the whole bounding box and silently lifts the real model far off the
-          // ground plane — exactly what caused visible parallax drift here (the box's Y
-          // ranged -346 to +40, so resting box.min at 0 floated the actual buildings/roads
-          // ~346m above grade). Trust the source file's own Y=0 datum instead, and use
-          // modelCalibration.offsetUp in the calibration panel for any real correction.
-          root.position.set(-center.x, 0, -center.z);
+            const box = new THREE.Box3().setFromObject(root);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const buildings: MasterplanBuilding[] = rawBuildings.map((b) => ({
+              name: b.name,
+              localCenter: [
+                b.localCenter[0] - center.x,
+                b.localCenter[1],
+                b.localCenter[2] - center.z,
+              ],
+            }));
+            onModelLoaded?.({ width: size.x, depth: size.z }, buildings);
+            // Recenter horizontally on the footprint only. Do NOT auto-rest box.min.y at
+            // ground: a single outlier low vertex (stray geometry, a dipped terrain patch)
+            // drags the whole bounding box and silently lifts the real model far off the
+            // ground plane — exactly what caused visible parallax drift here (the box's Y
+            // ranged -346 to +40, so resting box.min at 0 floated the actual buildings/roads
+            // ~346m above grade). Trust the source file's own Y=0 datum instead, and use
+            // modelCalibration.offsetUp in the calibration panel for any real correction.
+            root.position.set(-center.x, 0, -center.z);
 
-          holder!.add(root);
-          applyParams(initialParams);
-        });
+            holder!.add(root);
+            applyParams(initialParams);
+            onProgress?.(1);
+          },
+          (evt) => {
+            if (evt.lengthComputable) onProgress?.(evt.loaded / evt.total);
+          },
+        );
       } else {
         // ponytail: procedural block massing stands in for a real georeferenced
         // masterplan export, used when no model.url is supplied for a project.
@@ -207,30 +263,54 @@ export function createMasterplanLayer(
           { x: 0, y: 25, w: 30, d: 20, h: 70 },
           { x: 40, y: 15, w: 22, d: 22, h: 55 },
         ];
-        const material = new THREE.MeshPhongMaterial({ color: 0x818cf8, opacity: 0.9, transparent: true });
-        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.5, transparent: true });
+        const material = new THREE.MeshPhongMaterial({
+          color: 0x818cf8,
+          opacity: 0.9,
+          transparent: true,
+        });
+        const edgeMaterial = new THREE.LineBasicMaterial({
+          color: 0xffffff,
+          opacity: 0.5,
+          transparent: true,
+        });
         for (const b of layout) {
           const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
           const mesh = new THREE.Mesh(geo, material);
           mesh.position.set(b.x, b.h / 2, b.y);
           holder!.add(mesh);
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMaterial);
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geo),
+            edgeMaterial,
+          );
           edges.position.copy(mesh.position);
           holder!.add(edges);
         }
         applyParams(initialParams);
       }
 
-      renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+      renderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(),
+        context: gl,
+        antialias: true,
+      });
       renderer.autoClear = false;
     },
 
     render(gl, matrix) {
       const m = new THREE.Matrix4().fromArray(matrix as unknown as number[]);
       const l = new THREE.Matrix4()
-        .makeTranslation(modelTransform.x, modelTransform.y, modelTransform.z ?? 0)
+        .makeTranslation(
+          modelTransform.x,
+          modelTransform.y,
+          modelTransform.z ?? 0,
+        )
         .scale(new THREE.Vector3(mercatorScale, -mercatorScale, mercatorScale))
-        .multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+        .multiply(
+          new THREE.Matrix4().makeRotationAxis(
+            new THREE.Vector3(1, 0, 0),
+            Math.PI / 2,
+          ),
+        );
 
       camera.projectionMatrix = m.multiply(l);
       renderer.resetState();

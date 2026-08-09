@@ -24,3 +24,154 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Ambient starfield (see SKY_STARS in ZoyaShowcase.tsx). Each star's final position never
+   moves — `.lmd-star-host` is a zero-size anchor, `.lmd-star-dot` sits there from the start,
+   and only `.lmd-star-tail` animates: it shrinks toward the dot (scaleX 1 -> 0) while fading,
+   reading as a comet arriving fast and settling into a fixed point. The tail is positioned
+   `left: 0` (its own box extends rightward from the star's anchor point, per normal CSS box
+   layout), so the edge actually touching the star is the LEFT edge, not the right — both
+   `transform-origin` and the gradient direction have to point at that same left edge, or
+   rotation swings the tail around its *far* tip instead of the star, and scaleX retracts it
+   away from the star instead of into it. Rotation is baked into the keyframe itself via
+   `--tail-rotate` rather than a separate inline `transform`, so it doesn't fight the
+   animated one for control of the cascade (the recurring trap in this file). */
+.lmd-star-host {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.lmd-star-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: #fff;
+}
+@keyframes lmd-star-tail {
+  0% {
+    transform: rotate(var(--tail-rotate)) scaleX(1);
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: rotate(var(--tail-rotate)) scaleX(0);
+    opacity: 0;
+  }
+}
+.lmd-star-tail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1.5px;
+  transform-origin: 0% 50%;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.9), transparent);
+  animation: lmd-star-tail 900ms ease-out both;
+}
+
+/* LMD portfolio pins: a soft pulsing glow orb. Amber is the default (night, Black Marble
+   city-lights) — kept because it's the original approved look and still reads fine against
+   dark ocean/land. It blends in badly against the day satellite basemap's tan/yellow desert
+   terrain though, so `.lmd-day` (toggled on the root element from `introNight`, see
+   ZoyaShowcase) swaps it for hot pink there instead, a hue the day imagery never produces.
+   The project name only appears as a tooltip on hover, above the pin. Four DOM
+   levels on purpose: `host` is Mapbox's own positioned element (untouched); `.lmd-pin-pop-wrap`
+   carries the one-shot entrance keyframe (transform+opacity); `.lmd-pin` carries the dissolve
+   fade (opacity again, but on a different element than the entrance keyframe — animated
+   properties always win the cascade over a later class on the *same* element, so the two
+   opacity changes would otherwise fight over which one wins); `.lmd-pin-glow` carries its own
+   continuous pulse (transform+opacity) — a third element again, so it doesn't fight the other two. */
+@keyframes lmd-pin-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.lmd-pin-pop-wrap {
+  animation: lmd-pin-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes lmd-pin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.95;
+  }
+}
+.lmd-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+.lmd-pin-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.lmd-pin-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(245, 166, 35, 0.9) 0%, rgba(245, 166, 35, 0.35) 45%, transparent 75%);
+  animation: lmd-pin-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.lmd-day .lmd-pin-glow {
+  background: radial-gradient(circle, rgba(255, 45, 120, 0.9) 0%, rgba(255, 45, 120, 0.35) 45%, transparent 75%);
+}
+.lmd-pin-core {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #fff8ea;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+.lmd-pin-label {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(10, 22, 20, 0.95);
+  border: 1px solid rgba(245, 243, 238, 0.2);
+  color: #f5f3ee;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.lmd-pin:hover .lmd-pin-label {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* Selected state reads via color, not a size change — animating `transform` here would
+   fight the pulse keyframe above. Teal matches Zoya's own campaign accent. */
+.lmd-pin-selected .lmd-pin-glow {
+  background: radial-gradient(circle, rgba(28, 147, 160, 0.9) 0%, rgba(28, 147, 160, 0.35) 45%, transparent 75%);
+}
+.lmd-pin-selected .lmd-pin-label {
+  border-color: rgba(28, 147, 160, 0.5);
+}
