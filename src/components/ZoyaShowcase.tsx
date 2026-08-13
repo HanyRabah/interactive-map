@@ -44,6 +44,10 @@ import {
   type ImageMasterplanParams,
 } from "./ImageMasterplanLayer";
 import { lngLatToMeters, minAreaRect, type MinRect } from "./boundary";
+import { addEsriImageryLayer, removeEsriImageryLayer } from "./EsriImageryLayer";
+import { addGoogleImageryLayer, removeGoogleImageryLayer } from "./GoogleImageryLayer";
+import type { JourneyImagerySource } from "@/app/api/journey-imagery/route";
+import type { DefaultImagerySource } from "@/app/api/default-imagery/route";
 import { createAtmosphereLayer, type AtmosphereLayer } from "./AtmosphereLayer";
 import { PROJECTS } from "./GlobePortfolioMap";
 import { ZoyaAsset } from "./ZoyaAsset";
@@ -285,11 +289,17 @@ export default function ZoyaShowcase() {
   // for DP staff tuning a project, not something a real visitor should ever see — hidden
   // unless the URL explicitly asks for them (e.g. ?tools=1), not on by default.
   const [toolsEnabled, setToolsEnabled] = useState(false);
+  // The raw ?tools= value, relayed as-is to /api/journey-imagery's POST for server-side
+  // secret comparison — never checked client-side, so the real secret never has to ship
+  // in the JS bundle, only whatever the URL happens to contain.
+  const toolsKeyRef = useRef<string | null>(null);
   useEffect(() => {
     // Syncing from the URL (an external system) on mount, not derived from React state —
     // the one-time read the lint rule's own docs carve out as fine.
+    const params = new URLSearchParams(window.location.search);
+    toolsKeyRef.current = params.get("tools");
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToolsEnabled(new URLSearchParams(window.location.search).has("tools"));
+    setToolsEnabled(params.has("tools"));
   }, []);
 
   // Warm the browser's HTTP cache for every real project's masterplan assets as soon as the
@@ -305,6 +315,75 @@ export default function ZoyaShowcase() {
   // Perspective (the hand-tuned/generic masterplan angle) vs a flat top-down view — applies
   // to whichever of 2D/3D is currently showing.
   const [topView, setTopView] = useState(false);
+
+  // Global, persisted default imagery source (Esri vs Mapbox's own satellite) — applies
+  // everywhere, including the intro globe, not just the journey stages. Initial state
+  // optimistically assumes "esri" (the intended new default) so there's no visible flash
+  // of Mapbox-then-Esri while the fetch below is in flight; reconciled to the real value
+  // once it resolves. defaultImageryRef mirrors it for use inside the style.load handler,
+  // which may run before that fetch resolves.
+  const [defaultImagery, setDefaultImagery] = useState<DefaultImagerySource>("esri");
+  const defaultImageryRef = useRef<DefaultImagerySource>("esri");
+  const [defaultImagerySaving, setDefaultImagerySaving] = useState(false);
+  useEffect(() => {
+    defaultImageryRef.current = defaultImagery;
+  }, [defaultImagery]);
+  useEffect(() => {
+    fetch("/api/default-imagery", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { source?: DefaultImagerySource }) => {
+        if (data.source === "esri" || data.source === "mapbox") setDefaultImagery(data.source);
+      })
+      .catch(() => {});
+  }, []);
+  // Reactive application: covers both the toggle button (state changes after mount) and
+  // the case where this fetch resolves after style.load already ran (see onAdd below,
+  // which also applies the ref's value directly for the common case it resolves first).
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.isStyleLoaded()) return;
+    if (defaultImagery === "esri") addEsriImageryLayer(m);
+    else removeEsriImageryLayer(m);
+  }, [defaultImagery]);
+
+  // Global "journey imagery source" flag — read from /api/journey-imagery (backed by a
+  // shared Vercel Edge Config store) on mount, so it's the same for every visitor, not
+  // just whoever last toggled it locally. journeySourceRef mirrors it for use inside
+  // map event callbacks, same pattern as stageRef.
+  const [journeySource, setJourneySource] = useState<JourneyImagerySource>("mapbox");
+  const journeySourceRef = useRef<JourneyImagerySource>("mapbox");
+  const [journeySourceSaving, setJourneySourceSaving] = useState(false);
+  const googleImageryFailedRef = useRef(false);
+  useEffect(() => {
+    journeySourceRef.current = journeySource;
+  }, [journeySource]);
+  useEffect(() => {
+    fetch("/api/journey-imagery", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { source?: JourneyImagerySource }) => {
+        if (data.source === "google" || data.source === "mapbox") setJourneySource(data.source);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function toggleJourneySource() {
+    const next: JourneyImagerySource = journeySource === "mapbox" ? "google" : "mapbox";
+    setJourneySourceSaving(true);
+    try {
+      const res = await fetch("/api/journey-imagery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: next, secret: toolsKeyRef.current }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      googleImageryFailedRef.current = false;
+      setJourneySource(next);
+    } catch (err) {
+      console.error("Failed to update journey imagery source", err);
+    } finally {
+      setJourneySourceSaving(false);
+    }
+  }
 
   const [stage, setStage] = useState<Stage>("logo");
   const stageRef = useRef<Stage>("logo");
@@ -529,12 +608,6 @@ export default function ZoyaShowcase() {
 
   useEffect(() => {
     if (!mapContainer.current || map.current || !MAPBOX_TOKEN) return;
-    // False positive: this is the standard mapbox-gl setup call (must run before `new
-    // mapboxgl.Map()` below, so it can't be "moved to an effect" — it's already in one).
-    // The identical line in GlobePortfolioMap.tsx lints clean; something about this
-    // component's added complexity is confusing the rule's scope analysis here, not a
-    // real out-of-component mutation.
-    // eslint-disable-next-line react-hooks/immutability -- mapboxgl.accessToken is a real setup call, not a stray external mutation (see above)
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
     // Starts as a near-invisible point centered in the right half (not pinned to the far
@@ -555,6 +628,11 @@ export default function ZoyaShowcase() {
 
     m.on("style.load", () => {
       m.setFog(introFog());
+      // Applied here (not waiting for the /api/default-imagery fetch, which usually loses
+      // this race to Mapbox's own style.load anyway) using the ref's current value —
+      // "esri" until proven otherwise. The reactive effect above (keyed on defaultImagery
+      // state) covers the opposite race, where the fetch resolves after this already ran.
+      if (defaultImageryRef.current === "esri") addEsriImageryLayer(m);
       // Real night-lights imagery for the space stages, opaque on top of the base satellite
       // style; opacity drops to 0 in beginFlight() as the real destination comes into frame,
       // cross-fading (via raster-opacity-transition) into the daylit satellite tiles beneath
@@ -794,6 +872,18 @@ export default function ZoyaShowcase() {
       if (!map.current) return;
       setStage("flight");
       atmosphereTarget.current = 0.6;
+      // Journey-only imagery source (see journeySource) — mounted right as the flight
+      // starts, not on arrival, so Google's tiles have the whole ~4.2s flyTo to load in
+      // underneath the moving camera. Loading it only after arrival (the original
+      // approach) meant visitors saw Mapbox's own satellite for the entire flight, then a
+      // visible pop to Google right as the camera settled — exactly the "reveal" this
+      // avoids. Never shown on the intro globe/split/focus stages. Falls back to Mapbox's
+      // own satellite tiles (already underneath) automatically if Google's tiles error.
+      if (journeySourceRef.current === "google" && !googleImageryFailedRef.current) {
+        addGoogleImageryLayer(map.current, () => {
+          googleImageryFailedRef.current = true;
+        });
+      }
       map.current.flyTo({
         center: [project.lng, project.lat],
         zoom: hero.zoom,
@@ -944,6 +1034,27 @@ export default function ZoyaShowcase() {
     const next = !topView;
     setTopView(next);
     m.easeTo({ pitch: next ? 0 : masterplan.pitch, bearing: next ? 0 : masterplan.bearing, duration: 900 });
+  }
+
+  // Global, persisted default imagery source — unlike journeySource (mapbox|google, ToS-risky,
+  // journey-stages-only), Esri is a properly licensed replacement for Mapbox's own satellite
+  // imagery, so it applies everywhere (including the intro globe) with no stage gating.
+  async function toggleDefaultImagery() {
+    const next: DefaultImagerySource = defaultImagery === "mapbox" ? "esri" : "mapbox";
+    setDefaultImagerySaving(true);
+    try {
+      const res = await fetch("/api/default-imagery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: next, secret: toolsKeyRef.current }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setDefaultImagery(next);
+    } catch (err) {
+      console.error("Failed to update default imagery source", err);
+    } finally {
+      setDefaultImagerySaving(false);
+    }
   }
 
   function startDrawing() {
@@ -1151,6 +1262,7 @@ export default function ZoyaShowcase() {
 
   function goToProject(id: string) {
     setSwitcherOpen(false);
+    if (map.current) removeGoogleImageryLayer(map.current);
     const real = id === "zoya" ? ZOYA : PROJECTS.find((p) => p.id === id);
     if (real && real.id === activeProjectId && stage === "masterplan") {
       backToOverview();
@@ -1377,6 +1489,33 @@ export default function ZoyaShowcase() {
         >
           <Image src="/brand/lmd-logo-white.png" alt="LMD" width={378} height={157} className="h-5 w-auto opacity-90" />
         </div>
+      )}
+
+      {/* Global, persisted default imagery source — applies everywhere (including the intro
+          globe), unlike the journey-only toggle below. Right-anchored, stacked below the LMD
+          Projects switcher (right-5 top-5) and the per-stage coordinate/status pill (right-5
+          top-16) — the left side is where the masterplan calibration tools live. */}
+      {toolsEnabled && (
+        <button
+          onClick={toggleDefaultImagery}
+          disabled={defaultImagerySaving}
+          className="absolute right-5 top-28 z-20 rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40 disabled:opacity-50"
+        >
+          {defaultImagerySaving ? "Saving…" : `Default Imagery: ${defaultImagery === "esri" ? "Esri (all visitors)" : "Mapbox (all visitors)"}`}
+        </button>
+      )}
+
+      {/* Global, persisted (Edge Config, shared by every visitor) journey imagery source —
+          distinct from the default-imagery toggle above: this one is ToS-risky (Google),
+          journey-stages-only, and independent of it. */}
+      {toolsEnabled && (
+        <button
+          onClick={toggleJourneySource}
+          disabled={journeySourceSaving}
+          className="absolute right-5 top-40 z-20 rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40 disabled:opacity-50"
+        >
+          {journeySourceSaving ? "Saving…" : `Journey Imagery: ${journeySource === "google" ? "Google (all visitors)" : "Mapbox (all visitors)"}`}
+        </button>
       )}
 
       {/* Project switcher — real LMD roster, grouped by country; only Zoya is a real
