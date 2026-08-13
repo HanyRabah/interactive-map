@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# original high-res source assets (large; optimized copies live in public/)
+/assets-src

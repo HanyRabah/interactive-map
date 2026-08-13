@@ -208,8 +208,16 @@ export function createMasterplanLayer(
             const seenNames = new Set<string>();
             const rawBuildings: MasterplanBuilding[] = [];
             root.traverse((obj) => {
-              if (obj instanceof THREE.Mesh)
-                obj.material = materialFor(obj.name);
+              // Only substitute the synthetic by-name material for meshes that actually
+              // came in untextured (the "fallback Material" CAD case materialFor was built
+              // for) — a real baked photogrammetry texture (BEC's tex_u1_v1 baseColorTexture)
+              // must never be clobbered, or the model renders flat gray despite having real
+              // color data.
+              if (obj instanceof THREE.Mesh) {
+                const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+                const hasTexture = !!(mat as THREE.MeshStandardMaterial | undefined)?.map;
+                if (!hasTexture) obj.material = materialFor(obj.name);
+              }
               if (/building/i.test(obj.name) && !seenNames.has(obj.name)) {
                 seenNames.add(obj.name);
                 const bbox = new THREE.Box3().setFromObject(obj);

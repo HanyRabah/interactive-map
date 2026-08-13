@@ -27,10 +27,23 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import {
   createMasterplanLayer,
+  DEFAULT_MASTERPLAN_PARAMS,
   type MasterplanLayer,
   type MasterplanBuilding,
   type MasterplanParams,
 } from "./MasterplanLayer";
+import {
+  addImageMasterplanLayer,
+  updateImageMasterplanLayer,
+  removeImageMasterplanLayer,
+  getImageAspectRatio,
+  fitToAspect,
+  computeImageCorners,
+  pointInQuad,
+  DEFAULT_IMAGE_MASTERPLAN_PARAMS,
+  type ImageMasterplanParams,
+} from "./ImageMasterplanLayer";
+import { lngLatToMeters, minAreaRect, type MinRect } from "./boundary";
 import { createAtmosphereLayer, type AtmosphereLayer } from "./AtmosphereLayer";
 import { PROJECTS } from "./GlobePortfolioMap";
 import { ZoyaAsset } from "./ZoyaAsset";
@@ -38,7 +51,6 @@ import { ZOYA_HERO_VIDEO, ZOYA_AERIAL_PHOTOS, ZOYA_AERIAL_DIR } from "@/data/zoy
 import { LMD_PROJECTS, type LmdProjectStub } from "@/data/lmdProjects";
 
 const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")!;
-const CALIB: MasterplanParams = ZOYA.modelCalibration ?? { scale: 1, rotationDeg: 0, offsetE: 0, offsetN: 0, offsetUp: 0 };
 
 // Zoya's own campaign color (LMD's real embroidered "ZOYA" wordmark, lmd.com.eg/en) — not
 // an invented accent. LMD's own brand mark is plain black/white; this teal is Zoya-specific.
@@ -47,7 +59,6 @@ const ACCENT = "#1c93a0";
 const COUNTRIES_ORDER = ["Egypt", "UAE", "Spain", "Greece"] as const;
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
-const HERO_CENTER: [number, number] = [ZOYA.lng, ZOYA.lat];
 // Lower pitch than a typical "cinematic" establishing shot on purpose: at this specific
 // coastal anchor point, a steep pitch put most of the frame over open sea/sky instead of
 // the actual textured coastline — verified by screenshot, not assumed.
@@ -65,6 +76,22 @@ const HERO_ZOOM_BY_PRECISION: Record<NonNullable<LmdProjectStub["precision"]>, n
   district: 13.5,
   city: 11.5,
 };
+
+// A PROJECTS entry (GlobePortfolioMap.tsx's real data) that made it this far always has a
+// real, calibrated model/masterplanImage — that's what routes it through the flight/
+// masterplan flow below instead of the honest "comingsoon" placeholder.
+type ShowcaseProject = (typeof PROJECTS)[number];
+
+// Zoya alone got a hand-tuned, screenshot-verified camera pass; every other real project
+// (BEC today, more later) shares one reasonable generic angle instead of guessing a new
+// one per site.
+function viewsFor(id: string) {
+  if (id === ZOYA.id) return { hero: HERO_VIEW, masterplan: MASTERPLAN_VIEW };
+  return {
+    hero: { zoom: HERO_ZOOM_BY_PRECISION.exact, pitch: GENERIC_HERO_VIEW.pitch, bearing: GENERIC_HERO_VIEW.bearing },
+    masterplan: { zoom: 17, pitch: 55, bearing: -20 },
+  };
+}
 
 // No real aerial photography exists yet for any project but Zoya (see zoyaMedia.ts's own
 // "drop real files in, they replace this automatically" pattern — same idea, just inline
@@ -219,6 +246,65 @@ export default function ZoyaShowcase() {
   const atmosphereTarget = useRef(0);
   const atmosphereCurrent = useRef(0);
   const masterplanLayer = useRef<MasterplanLayer | null>(null);
+  const imageMasterplanId = useRef<string | null>(null);
+  // Which image-masterplan layer ids already have their click-to-zoom handler bound — see
+  // enter2DMasterplan's comment on why this guards against duplicate registrations.
+  const boundImageClickLayers = useRef(new Set<string>());
+  // Which real project (Zoya, BEC, ...) the flight/hero/masterplan stages are currently
+  // showing. A ref for the imperative map calls (flyTo center/model url etc., read at call
+  // time, not captured in a stale closure) plus a state mirror so render can react to it.
+  const activeProjectRef = useRef<ShowcaseProject>(ZOYA);
+  const [activeProjectId, setActiveProjectId] = useState(ZOYA.id);
+  const activeProject = PROJECTS.find((p) => p.id === activeProjectId) ?? ZOYA;
+  // "2d" when the active project has a real masterplan image (Zoya today) — the flat
+  // branded graphic is the more legible default; "3d" for a project with only a model
+  // (BEC today), so its real GLB is what "Explore Masterplan" actually shows.
+  const [masterplanMode, setMasterplanMode] = useState<"2d" | "3d">("2d");
+  // Live, per-mode calibration mirrors — start at the project's saved values, then track
+  // whatever "Apply Boundary" or manual tuning does, so setParams/updateImageMasterplanLayer
+  // calls always have the current numbers instead of stale ones baked in at layer creation.
+  // Refs for imperative code (always current, no stale-closure risk); state alongside so the
+  // nudge/resize panel can actually display and react to the current values.
+  const calib3DRef = useRef<MasterplanParams>(DEFAULT_MASTERPLAN_PARAMS);
+  const calibImageRef = useRef<ImageMasterplanParams>(DEFAULT_IMAGE_MASTERPLAN_PARAMS);
+  const [calib3D, setCalib3D] = useState<MasterplanParams>(DEFAULT_MASTERPLAN_PARAMS);
+  const [calibImage, setCalibImage] = useState<ImageMasterplanParams>(DEFAULT_IMAGE_MASTERPLAN_PARAMS);
+  const modelFootprint = useRef<{ width: number; depth: number } | null>(null);
+  // Raw building centers (pre-lng/lat-conversion) kept alongside the placed `buildings`
+  // state — applying a boundary fit changes calib3DRef, and without these the building
+  // dots would stay at their old (now-wrong) positions until the whole model reloads.
+  const rawBuildings = useRef<MasterplanBuilding[]>([]);
+  const [drawMode, setDrawMode] = useState(false);
+  const drawModeRef = useRef(false);
+  const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
+  const drawPointsRef = useRef<[number, number][]>([]);
+  const [boundaryResult, setBoundaryResult] = useState<{ rect: MinRect; centroidMeters: [number, number] } | null>(
+    null
+  );
+  // Calibration tools (Draw Boundary, the drawing toolbar/result panel, Adjust Position) are
+  // for DP staff tuning a project, not something a real visitor should ever see — hidden
+  // unless the URL explicitly asks for them (e.g. ?tools=1), not on by default.
+  const [toolsEnabled, setToolsEnabled] = useState(false);
+  useEffect(() => {
+    // Syncing from the URL (an external system) on mount, not derived from React state —
+    // the one-time read the lint rule's own docs carve out as fine.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setToolsEnabled(new URLSearchParams(window.location.search).has("tools"));
+  }, []);
+
+  // Warm the browser's HTTP cache for every real project's masterplan assets as soon as the
+  // page loads — well before "Start the Journey" — so the GLTFLoader/image fetch later hits
+  // cache instead of the network. Just a plain fetch, not a parse/render: cheap, and safe to
+  // fire for every real project up front since there are only ever a couple of them.
+  useEffect(() => {
+    for (const p of PROJECTS) {
+      if (p.model?.url) fetch(p.model.url).catch(() => {});
+      if (p.masterplanImage?.url) fetch(p.masterplanImage.url).catch(() => {});
+    }
+  }, []);
+  // Perspective (the hand-tuned/generic masterplan angle) vs a flat top-down view — applies
+  // to whichever of 2D/3D is currently showing.
+  const [topView, setTopView] = useState(false);
 
   const [stage, setStage] = useState<Stage>("logo");
   const stageRef = useRef<Stage>("logo");
@@ -262,6 +348,26 @@ export default function ZoyaShowcase() {
     : "";
   const revealedName = useScrambleReveal(selectedProject?.name ?? "", selectedPinId);
   const revealedCoords = useScrambleReveal(selectedCoordsTarget, selectedPinId);
+
+  function renderBoundaryDraw(points: [number, number][]) {
+    const m = map.current;
+    const src = m?.getSource("boundary-draw") as mapboxgl.GeoJSONSource | undefined;
+    if (!src) return;
+    const features: GeoJSON.Feature[] = [
+      ...points.map((p, i) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: p },
+        properties: { i },
+      })),
+      ...(points.length >= 2
+        ? [{ type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: points }, properties: {} }]
+        : []),
+      ...(points.length >= 3
+        ? [{ type: "Feature" as const, geometry: { type: "Polygon" as const, coordinates: [[...points, points[0]]] }, properties: {} }]
+        : []),
+    ];
+    src.setData({ type: "FeatureCollection", features });
+  }
 
   // The logo+slogan stay mounted for the whole session — the spec calls for them to
   // *move*, never to vanish, so this docks left instead of unmounting.
@@ -356,7 +462,14 @@ export default function ZoyaShowcase() {
     // path — only the deselect-back-to-split effect above does.
     setFocusPanelVisible(false);
     setFocusPanelMounted(false);
-    if (selectedPinId === "zoya") {
+    // Any real project — one with an actual calibrated model/masterplanImage in PROJECTS,
+    // not just an LMD_PROJECTS stub — gets the real flight/hero/masterplan flow. Zoya no
+    // longer needs a special case here: it has a model like any other real project now.
+    const real = selectedPinId === "zoya" ? ZOYA : PROJECTS.find((p) => p.id === selectedPinId);
+    if (real?.model || real?.masterplanImage) {
+      activeProjectRef.current = real;
+      setActiveProjectId(real.id);
+      setMasterplanMode(real.masterplanImage ? "2d" : "3d");
       beginFlight();
       return;
     }
@@ -416,6 +529,12 @@ export default function ZoyaShowcase() {
 
   useEffect(() => {
     if (!mapContainer.current || map.current || !MAPBOX_TOKEN) return;
+    // False positive: this is the standard mapbox-gl setup call (must run before `new
+    // mapboxgl.Map()` below, so it can't be "moved to an effect" — it's already in one).
+    // The identical line in GlobePortfolioMap.tsx lints clean; something about this
+    // component's added complexity is confusing the rule's scope analysis here, not a
+    // real out-of-component mutation.
+    // eslint-disable-next-line react-hooks/immutability -- mapboxgl.accessToken is a real setup call, not a stray external mutation (see above)
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
     // Starts as a near-invisible point centered in the right half (not pinned to the far
@@ -470,6 +589,42 @@ export default function ZoyaShowcase() {
       ]) {
         if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", "none");
       }
+
+      // Boundary-draw preview: click points, connecting line, and a translucent fill once
+      // closed — same mechanism as the /portfolio page's "Draw Boundary" tool, ported here
+      // so a misplaced masterplan (2D image or 3D model) can be corrected directly in this
+      // experience instead of only in the admin-style portfolio view.
+      m.addSource("boundary-draw", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({
+        id: "boundary-draw-fill",
+        type: "fill",
+        source: "boundary-draw",
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": ACCENT, "fill-opacity": 0.2 },
+      });
+      m.addLayer({
+        id: "boundary-draw-line",
+        type: "line",
+        source: "boundary-draw",
+        filter: ["in", ["geometry-type"], ["literal", ["LineString", "Polygon"]]],
+        paint: { "line-color": ACCENT, "line-width": 2 },
+      });
+      m.addLayer({
+        id: "boundary-draw-points",
+        type: "circle",
+        source: "boundary-draw",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 5, "circle-color": "#ffffff", "circle-stroke-width": 2, "circle-stroke-color": ACCENT },
+      });
+      m.on("click", (e) => {
+        if (!drawModeRef.current) return;
+        const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        const next = [...drawPointsRef.current, pt];
+        drawPointsRef.current = next;
+        setDrawPoints(next);
+        renderBoundaryDraw(next);
+      });
+
       setLoaded(true);
     });
 
@@ -633,52 +788,74 @@ export default function ZoyaShowcase() {
     // (still used for the masterplan's own lighting and the fog/atmosphere) is fixed to a
     // daylit value here rather than carried from introNight, to match.
     setSunElevation(85);
+    const project = activeProjectRef.current;
+    const { hero } = viewsFor(project.id);
     transitionToDayThenRun(() => {
       if (!map.current) return;
       setStage("flight");
       atmosphereTarget.current = 0.6;
       map.current.flyTo({
-        center: HERO_CENTER,
-        zoom: HERO_VIEW.zoom,
-        pitch: HERO_VIEW.pitch,
-        bearing: HERO_VIEW.bearing,
+        center: [project.lng, project.lat],
+        zoom: hero.zoom,
+        pitch: hero.pitch,
+        bearing: hero.bearing,
         padding: { left: 0, right: 0, top: 0, bottom: 0 },
         duration: 4200,
         essential: true,
       });
-      window.setTimeout(() => setStage("hero"), 4300);
+      window.setTimeout(() => {
+        setStage("hero");
+        // Show the real branded masterplan graphic draped in the scene right away, not
+        // hidden behind a separate "Explore Masterplan" click — clicking it (see
+        // enter2DMasterplan's click binding) zooms into the full masterplan stage.
+        if (project.masterplanImage) enter2DMasterplan(project);
+      }, 4300);
     });
   }
 
-  function enterMasterplan() {
+  function remove3DMasterplanLayer() {
+    const m = map.current;
+    if (m && masterplanLayer.current && m.getLayer(masterplanLayer.current.id)) {
+      m.removeLayer(masterplanLayer.current.id);
+    }
+    masterplanLayer.current = null;
+    setBuildings([]);
+  }
+
+  function removeImageMasterplan() {
+    const m = map.current;
+    if (m && imageMasterplanId.current) removeImageMasterplanLayer(m, imageMasterplanId.current);
+    imageMasterplanId.current = null;
+  }
+
+  function enter3DMasterplan(project: ShowcaseProject) {
     const m = map.current;
     if (!m) return;
-    atmosphereTarget.current = 0.35;
-    m.flyTo({
-      center: HERO_CENTER,
-      zoom: MASTERPLAN_VIEW.zoom,
-      pitch: MASTERPLAN_VIEW.pitch,
-      bearing: MASTERPLAN_VIEW.bearing,
-      padding: { left: 0, right: 0, top: 0, bottom: 0 },
-      duration: 2400,
-    });
-    if (!masterplanLayer.current) {
-      // ~28MB Draco-compressed GLB — real network+parse time. The camera flying in is
-      // motion enough to hide a lot, but on a slow connection it wasn't: nothing else
-      // signaled a click had registered, so it read as broken rather than loading.
+    removeImageMasterplan();
+    const layerId = `masterplan-${project.id}`;
+    if (masterplanLayer.current && masterplanLayer.current.id !== layerId) remove3DMasterplanLayer();
+    if (!masterplanLayer.current && project.model) {
+      // Real GLB — network+parse time varies with size. The camera flying in is motion
+      // enough to hide a lot, but on a slow connection it wasn't: nothing else signaled a
+      // click had registered, so it read as broken rather than loading.
       setMasterplanLoading(true);
       setMasterplanProgress(0);
+      const calib = project.modelCalibration ?? DEFAULT_MASTERPLAN_PARAMS;
+      calib3DRef.current = calib;
+      setCalib3D(calib);
       const layer = createMasterplanLayer(
-        "zoya-masterplan",
-        ZOYA.lng,
-        ZOYA.lat,
+        layerId,
+        project.lng,
+        project.lat,
         0,
-        ZOYA.model,
-        CALIB,
-        (_footprint, real) => {
+        project.model,
+        calib,
+        (footprint, real) => {
+          modelFootprint.current = footprint;
+          rawBuildings.current = real;
           const placed = real.map((b) => ({
             name: cleanBuildingName(b.name),
-            lngLat: buildingToLngLat(b, CALIB, ZOYA.lng, ZOYA.lat),
+            lngLat: buildingToLngLat(b, calib3DRef.current, project.lng, project.lat),
           }));
           setBuildings(placed);
           setMasterplanLoading(false);
@@ -689,19 +866,283 @@ export default function ZoyaShowcase() {
       masterplanLayer.current = layer;
       masterplanLayer.current.setSunElevation(sunElevation);
     }
+    setMasterplanMode("3d");
+  }
+
+  function enter2DMasterplan(project: ShowcaseProject) {
+    const m = map.current;
+    if (!m || !project.masterplanImage) return;
+    remove3DMasterplanLayer();
+    const layerId = `masterplan-image-${project.id}`;
+    const params = project.masterplanImage.params ?? DEFAULT_IMAGE_MASTERPLAN_PARAMS;
+    calibImageRef.current = params;
+    setCalibImage(params);
+    addImageMasterplanLayer(m, layerId, project.masterplanImage.url, project.lng, project.lat, params).catch((err) =>
+      console.error("Failed to add masterplan image layer", err)
+    );
+    // Raster ("image" source) layers are never queryable via queryRenderedFeatures, so
+    // Mapbox's layer-scoped events (map.on("click", layerId, ...)) never fire on them —
+    // a single map-wide handler tests the click point against the image's own geo quad
+    // instead. Bound once per map instance (not per layer id), guarded so re-entering
+    // 2D mode doesn't stack duplicate handlers.
+    if (!boundImageClickLayers.current.has("map")) {
+      boundImageClickLayers.current.add("map");
+      m.on("click", (e) => {
+        if (stageRef.current !== "hero" || !imageMasterplanId.current) return;
+        const quad = computeImageCorners(activeProjectRef.current.lng, activeProjectRef.current.lat, calibImageRef.current);
+        if (pointInQuad([e.lngLat.lng, e.lngLat.lat], quad)) openMasterplan();
+      });
+      m.on("mousemove", (e) => {
+        if (stageRef.current !== "hero" || !imageMasterplanId.current) {
+          m.getCanvas().style.cursor = "";
+          return;
+        }
+        const quad = computeImageCorners(activeProjectRef.current.lng, activeProjectRef.current.lat, calibImageRef.current);
+        m.getCanvas().style.cursor = pointInQuad([e.lngLat.lng, e.lngLat.lat], quad) ? "pointer" : "";
+      });
+    }
+    imageMasterplanId.current = layerId;
+    setMasterplanMode("2d");
+  }
+
+  function openMasterplan() {
+    const m = map.current;
+    if (!m) return;
+    const project = activeProjectRef.current;
+    atmosphereTarget.current = 0.35;
+    setTopView(false);
+    const { masterplan } = viewsFor(project.id);
+    m.flyTo({
+      center: [project.lng, project.lat],
+      zoom: masterplan.zoom,
+      pitch: masterplan.pitch,
+      bearing: masterplan.bearing,
+      padding: { left: 0, right: 0, top: 0, bottom: 0 },
+      duration: 2400,
+    });
+    // 2D is the default when a real branded masterplan graphic exists (Zoya) — it's the
+    // more legible starting view. A project with only a calibrated 3D model (BEC, for now)
+    // goes straight to that model instead, since there's no 2D asset yet to prefer.
+    if (project.masterplanImage) enter2DMasterplan(project);
+    else if (project.model) enter3DMasterplan(project);
     setStage("masterplan");
+  }
+
+  function toggleMasterplanMode() {
+    const project = activeProjectRef.current;
+    if (masterplanMode === "2d") enter3DMasterplan(project);
+    else enter2DMasterplan(project);
+  }
+
+  // Perspective <-> flat top-down, for whichever of 2D/3D is currently showing. Zoom/center
+  // stay put — only pitch (and bearing, since a tilted shot is rarely also north-up) move.
+  function toggleTopView() {
+    const m = map.current;
+    if (!m) return;
+    const project = activeProjectRef.current;
+    const { masterplan } = viewsFor(project.id);
+    const next = !topView;
+    setTopView(next);
+    m.easeTo({ pitch: next ? 0 : masterplan.pitch, bearing: next ? 0 : masterplan.bearing, duration: 900 });
+  }
+
+  function startDrawing() {
+    const m = map.current;
+    if (!m) return;
+    setBoundaryResult(null);
+    drawPointsRef.current = [];
+    setDrawPoints([]);
+    renderBoundaryDraw([]);
+    setDrawMode(true);
+    drawModeRef.current = true;
+    m.dragRotate.disable();
+    m.touchZoomRotate.disableRotation();
+    // Top-down is easiest to trace accurately against — the tilted masterplan framing is
+    // great for looking at, not for clicking precise ground points.
+    m.easeTo({ pitch: 0, bearing: 0, duration: 700 });
+  }
+
+  function undoDrawPoint() {
+    const next = drawPointsRef.current.slice(0, -1);
+    drawPointsRef.current = next;
+    setDrawPoints(next);
+    renderBoundaryDraw(next);
+  }
+
+  function exitDrawMode() {
+    setDrawMode(false);
+    drawModeRef.current = false;
+    map.current?.dragRotate.enable();
+    map.current?.touchZoomRotate.enableRotation();
+  }
+
+  function cancelDrawing() {
+    exitDrawMode();
+    drawPointsRef.current = [];
+    setDrawPoints([]);
+    renderBoundaryDraw([]);
+  }
+
+  function clearBoundary() {
+    setBoundaryResult(null);
+    drawPointsRef.current = [];
+    setDrawPoints([]);
+    renderBoundaryDraw([]);
+  }
+
+  function finishDrawing() {
+    const pts = drawPointsRef.current;
+    if (pts.length < 3) return;
+    const project = activeProjectRef.current;
+    const meterPts = pts.map(([lng, lat]) => lngLatToMeters(lng, lat, project.lng, project.lat));
+    const rect = minAreaRect(meterPts);
+    // rect.center (the rotating-calipers rectangle's own center) anchors the fitted shape
+    // better than a plain vertex average, which skews toward denser corners.
+    setBoundaryResult({ rect, centroidMeters: rect.center });
+    exitDrawMode();
+  }
+
+  function applyBoundaryTo3D() {
+    if (!boundaryResult) return;
+    const project = activeProjectRef.current;
+    const m = map.current;
+    if (!m) return;
+    const { rect, centroidMeters } = boundaryResult;
+    const footprint = modelFootprint.current;
+    const longSide = Math.max(rect.width, rect.height);
+    const footprintLong = footprint ? Math.max(footprint.width, footprint.depth) : null;
+    const scale = footprintLong ? Math.round((longSide / footprintLong) * 1000) / 1000 : calib3DRef.current.scale;
+    const next: MasterplanParams = {
+      scale,
+      rotationDeg: Math.round(rect.angleDeg * 10) / 10,
+      offsetE: Math.round(centroidMeters[0]),
+      offsetN: Math.round(centroidMeters[1]),
+      offsetUp: calib3DRef.current.offsetUp,
+    };
+    calib3DRef.current = next;
+    setCalib3D(next);
+    if (masterplanMode !== "3d") enter3DMasterplan(project);
+    masterplanLayer.current?.setParams(next);
+    m.triggerRepaint();
+    // Re-place the building dots too — they were computed from the old calibration and
+    // would otherwise sit wherever the model used to be, not where it is now.
+    if (rawBuildings.current.length > 0) {
+      const placed = rawBuildings.current.map((b) => ({
+        name: cleanBuildingName(b.name),
+        lngLat: buildingToLngLat(b, next, project.lng, project.lat),
+      }));
+      setBuildings(placed);
+    }
+  }
+
+  async function applyBoundaryToImage() {
+    if (!boundaryResult) return;
+    const project = activeProjectRef.current;
+    const m = map.current;
+    if (!m || !project.masterplanImage) return;
+    const { rect, centroidMeters } = boundaryResult;
+    // The drawn box's aspect ratio essentially never matches the real image's own — fitting
+    // both dimensions to it independently stretched the graphic. fitToAspect keeps the real
+    // proportions and shrinks whichever side the box doesn't tightly constrain.
+    const aspect = await getImageAspectRatio(project.masterplanImage.url).catch(() => rect.width / rect.height);
+    const { widthMeters, heightMeters } = fitToAspect(rect.width, rect.height, aspect);
+    const next: ImageMasterplanParams = {
+      widthMeters: Math.round(widthMeters),
+      heightMeters: Math.round(heightMeters),
+      rotationDeg: Math.round(rect.angleDeg * 10) / 10,
+      offsetE: Math.round(centroidMeters[0]),
+      offsetN: Math.round(centroidMeters[1]),
+    };
+    calibImageRef.current = next;
+    setCalibImage(next);
+    if (masterplanMode !== "2d") {
+      enter2DMasterplan(project);
+    } else if (imageMasterplanId.current) {
+      updateImageMasterplanLayer(m, imageMasterplanId.current, project.lng, project.lat, next);
+    }
+  }
+
+  // Fine manual adjustment after a boundary fit (or instead of one) — directional nudge +
+  // resize, not raw number entry. Resize always scales width/height together (never
+  // independently), so this can't reintroduce the stretch bug fitToAspect just fixed.
+  function nudgeImage(dE: number, dN: number) {
+    const project = activeProjectRef.current;
+    const m = map.current;
+    if (!m || !imageMasterplanId.current) return;
+    const next = { ...calibImageRef.current, offsetE: calibImageRef.current.offsetE + dE, offsetN: calibImageRef.current.offsetN + dN };
+    calibImageRef.current = next;
+    setCalibImage(next);
+    updateImageMasterplanLayer(m, imageMasterplanId.current, project.lng, project.lat, next);
+  }
+
+  function resizeImage(factor: number) {
+    const project = activeProjectRef.current;
+    const m = map.current;
+    if (!m || !imageMasterplanId.current) return;
+    const next = {
+      ...calibImageRef.current,
+      widthMeters: Math.round(calibImageRef.current.widthMeters * factor),
+      heightMeters: Math.round(calibImageRef.current.heightMeters * factor),
+    };
+    calibImageRef.current = next;
+    setCalibImage(next);
+    updateImageMasterplanLayer(m, imageMasterplanId.current, project.lng, project.lat, next);
+  }
+
+  function rotateImage(deltaDeg: number) {
+    const project = activeProjectRef.current;
+    const m = map.current;
+    if (!m || !imageMasterplanId.current) return;
+    const next = { ...calibImageRef.current, rotationDeg: Math.round((calibImageRef.current.rotationDeg + deltaDeg) * 10) / 10 };
+    calibImageRef.current = next;
+    setCalibImage(next);
+    updateImageMasterplanLayer(m, imageMasterplanId.current, project.lng, project.lat, next);
+  }
+
+  function nudge3D(dE: number, dN: number) {
+    const next = { ...calib3DRef.current, offsetE: calib3DRef.current.offsetE + dE, offsetN: calib3DRef.current.offsetN + dN };
+    calib3DRef.current = next;
+    setCalib3D(next);
+    masterplanLayer.current?.setParams(next);
+    map.current?.triggerRepaint();
+  }
+
+  function resize3D(factor: number) {
+    const next = { ...calib3DRef.current, scale: Math.round(calib3DRef.current.scale * factor * 1000) / 1000 };
+    calib3DRef.current = next;
+    setCalib3D(next);
+    masterplanLayer.current?.setParams(next);
+    map.current?.triggerRepaint();
+  }
+
+  function rotate3D(deltaDeg: number) {
+    const next = { ...calib3DRef.current, rotationDeg: Math.round((calib3DRef.current.rotationDeg + deltaDeg) * 10) / 10 };
+    calib3DRef.current = next;
+    setCalib3D(next);
+    masterplanLayer.current?.setParams(next);
+    map.current?.triggerRepaint();
   }
 
   function backToOverview() {
     const m = map.current;
     if (!m) return;
     setSelectedBuilding(null);
+    // The 2D masterplan is a flat, opaque raster patch draped exactly over the site — left
+    // in place, it reads as a visual glitch once the camera pulls back out to the wider
+    // hero framing. (The 3D model doesn't get the same treatment: it's real geometry that
+    // was already fine sitting there, unnoticed, before this mode existed.)
+    removeImageMasterplan();
+    clearBoundary();
+    exitDrawMode();
     atmosphereTarget.current = 0.6;
+    setTopView(false);
+    const project = activeProjectRef.current;
+    const { hero } = viewsFor(project.id);
     m.flyTo({
-      center: HERO_CENTER,
-      zoom: HERO_VIEW.zoom,
-      pitch: HERO_VIEW.pitch,
-      bearing: HERO_VIEW.bearing,
+      center: [project.lng, project.lat],
+      zoom: hero.zoom,
+      pitch: hero.pitch,
+      bearing: hero.bearing,
       padding: { left: 0, right: 0, top: 0, bottom: 0 },
       duration: 2000,
     });
@@ -710,7 +1151,8 @@ export default function ZoyaShowcase() {
 
   function goToProject(id: string) {
     setSwitcherOpen(false);
-    if (id === "zoya" && stage === "masterplan") {
+    const real = id === "zoya" ? ZOYA : PROJECTS.find((p) => p.id === id);
+    if (real && real.id === activeProjectId && stage === "masterplan") {
       backToOverview();
       return;
     }
@@ -726,7 +1168,7 @@ export default function ZoyaShowcase() {
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !loaded || stage !== "masterplan" || buildings.length === 0) return;
+    if (!m || !loaded || stage !== "masterplan" || masterplanMode !== "3d" || buildings.length === 0) return;
     const sourceId = "zoya-buildings";
     if (!m.getSource(sourceId)) {
       m.addSource(sourceId, {
@@ -764,7 +1206,7 @@ export default function ZoyaShowcase() {
       if (m.getLayer("zoya-building-glow")) m.removeLayer("zoya-building-glow");
       if (m.getSource(sourceId)) m.removeSource(sourceId);
     };
-  }, [loaded, stage, buildings]);
+  }, [loaded, stage, masterplanMode, buildings]);
 
   const showBrandMark = stage !== "logo" && !(stage === "split" && logoZoomHidden);
   const showSwitcherTrigger = stage !== "logo";
@@ -897,8 +1339,9 @@ export default function ZoyaShowcase() {
         </div>
       )}
 
-      {/* Real DP aerial video, when present — the live satellite map underneath is already a real aerial view either way */}
-      {stage === "hero" && !heroVideoFailed && (
+      {/* Real DP aerial video — Zoya-only real asset for now; no fabricated footage for
+          other projects, they just show the live satellite map underneath instead. */}
+      {stage === "hero" && activeProjectId === ZOYA.id && !heroVideoFailed && (
         <video
           className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
             heroVideoVisible ? "opacity-100" : "opacity-0"
@@ -966,7 +1409,7 @@ export default function ZoyaShowcase() {
                         >
                           <span>{p.name}</span>
                           {!p.href && <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-[#556661]">Soon</span>}
-                          {p.href && p.id === "zoya" && selectedPinId === "zoya" && (
+                          {p.href && selectedPinId === p.id && (
                             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ACCENT }} />
                           )}
                         </button>
@@ -1094,12 +1537,12 @@ export default function ZoyaShowcase() {
       {stage === "hero" && (
         <>
           <div className="absolute right-5 top-16 hidden rounded-lg border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[#8fa69e] backdrop-blur sm:block">
-            {ZOYA.lat.toFixed(4)}°N, {Math.abs(ZOYA.lng).toFixed(4)}°E
+            {activeProject.lat.toFixed(4)}°N, {Math.abs(activeProject.lng).toFixed(4)}°E
           </div>
 
           <div className="absolute inset-x-0 bottom-8 flex flex-col items-center gap-4">
             <button
-              onClick={enterMasterplan}
+              onClick={openMasterplan}
               className="rounded-full border bg-[#0a1614]/80 px-6 py-2.5 font-mono text-[11px] uppercase tracking-[0.25em] text-[#f5f3ee] backdrop-blur transition-colors"
               style={{ borderColor: `${ACCENT}80` }}
               onMouseEnter={(e) => {
@@ -1127,21 +1570,223 @@ export default function ZoyaShowcase() {
             >
               ← Overview
             </button>
-            <span className="rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
-              {masterplanLoading
-                ? `Loading model… ${Math.round(masterplanProgress * 100)}%`
-                : `${buildings.length} buildings mapped`}
-            </span>
+            {masterplanMode === "3d" && (
+              <span className="rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
+                {masterplanLoading
+                  ? `Loading model… ${Math.round(masterplanProgress * 100)}%`
+                  : `${buildings.length} buildings mapped`}
+              </span>
+            )}
+            {/* Only worth offering when both a real branded graphic and a real calibrated
+                model exist — Zoya today. A project with just one (BEC, so far) has nothing
+                to switch to. */}
+            {activeProject.masterplanImage && activeProject.model && (
+              <button
+                onClick={toggleMasterplanMode}
+                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+              >
+                {masterplanMode === "2d" ? "View in 3D" : "View 2D Masterplan"}
+              </button>
+            )}
+            {(activeProject.masterplanImage || activeProject.model) && (
+              <button
+                onClick={toggleTopView}
+                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+              >
+                {topView ? "Perspective View" : "Top View"}
+              </button>
+            )}
+            {toolsEnabled && !drawMode && (activeProject.model || activeProject.masterplanImage) && (
+              <button
+                onClick={startDrawing}
+                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+              >
+                Draw Boundary
+              </button>
+            )}
           </div>
 
           <div className="absolute right-5 top-16 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
-            ZOYA · Interactive Masterplan
+            {activeProject.name} · Interactive Masterplan
           </div>
+
+          {/* Drawing toolbar — click the map to trace the real site outline, top-down
+              (see startDrawing) so it's easy to place points accurately. */}
+          {toolsEnabled && drawMode && (
+            <div className="absolute inset-x-0 bottom-8 z-20 flex justify-center">
+              <div className="flex items-center gap-3 rounded-full border border-white/15 bg-[#0a1614]/95 px-4 py-2.5 backdrop-blur">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e]">
+                  Click the map to trace {activeProject.name}&apos;s boundary — {drawPoints.length} point
+                  {drawPoints.length === 1 ? "" : "s"}
+                  {drawPoints.length < 3 && " (need 3+)"}
+                </span>
+                <button
+                  onClick={undoDrawPoint}
+                  disabled={drawPoints.length === 0}
+                  className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] hover:text-[#f5f3ee] disabled:opacity-30"
+                >
+                  Undo
+                </button>
+                <button
+                  onClick={cancelDrawing}
+                  className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] hover:text-[#f5f3ee]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={finishDrawing}
+                  disabled={drawPoints.length < 3}
+                  className="rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#070f0d] disabled:opacity-30"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  Finish
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Boundary result — apply it to whichever masterplan(s) exist for this project;
+              the numbers are also copyable to hardcode permanently in PROJECTS. */}
+          {toolsEnabled && boundaryResult && !drawMode && (
+            <div className="absolute left-5 top-32 w-64 rounded-lg border border-white/15 bg-[#0a1614]/95 p-3 text-[11px] backdrop-blur">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee]">Boundary captured</div>
+              <div className="mb-3 font-mono text-[10px] text-[#8fa69e]">
+                {Math.round(boundaryResult.rect.width)}m × {Math.round(boundaryResult.rect.height)}m, rotation{" "}
+                {Math.round(boundaryResult.rect.angleDeg)}°
+              </div>
+              <div className="space-y-1.5">
+                {activeProject.model && (
+                  <button
+                    onClick={applyBoundaryTo3D}
+                    className="w-full rounded bg-white/10 px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    Apply to 3D Model
+                  </button>
+                )}
+                {activeProject.masterplanImage && (
+                  <button
+                    onClick={applyBoundaryToImage}
+                    className="w-full rounded bg-white/10 px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    Apply to Masterplan Image
+                  </button>
+                )}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`boundary: ${JSON.stringify(drawPoints)},`)}
+                    className="flex-1 rounded bg-white/10 px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    Copy polygon
+                  </button>
+                  <button
+                    onClick={clearBoundary}
+                    className="rounded px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-[#8fa69e] hover:text-[#f5f3ee]"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manual fine-tuning — nudge/rotate/resize, available any time (not just after a
+              boundary fit). Resize always scales width & height (or 3D scale) together, so
+              this can't stretch the image the way independent width/height entry did. */}
+          {toolsEnabled && !drawMode && (masterplanMode === "2d" ? activeProject.masterplanImage : activeProject.model) && (
+            <div
+              className="absolute w-52 rounded-lg border border-white/15 bg-[#0a1614]/95 p-3 text-[11px] backdrop-blur"
+              style={{ left: 20, top: boundaryResult ? 300 : 128 }}
+            >
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee]">Adjust position</div>
+              <div className="mb-3 grid grid-cols-3 gap-1">
+                <div />
+                <button
+                  onClick={() => (masterplanMode === "2d" ? nudgeImage(0, 5) : nudge3D(0, 5))}
+                  className="rounded bg-white/10 py-1.5 text-[#f5f3ee] hover:bg-white/20"
+                >
+                  ↑
+                </button>
+                <div />
+                <button
+                  onClick={() => (masterplanMode === "2d" ? nudgeImage(-5, 0) : nudge3D(-5, 0))}
+                  className="rounded bg-white/10 py-1.5 text-[#f5f3ee] hover:bg-white/20"
+                >
+                  ←
+                </button>
+                <div className="flex items-center justify-center font-mono text-[9px] text-[#556661]">move</div>
+                <button
+                  onClick={() => (masterplanMode === "2d" ? nudgeImage(5, 0) : nudge3D(5, 0))}
+                  className="rounded bg-white/10 py-1.5 text-[#f5f3ee] hover:bg-white/20"
+                >
+                  →
+                </button>
+                <div />
+                <button
+                  onClick={() => (masterplanMode === "2d" ? nudgeImage(0, -5) : nudge3D(0, -5))}
+                  className="rounded bg-white/10 py-1.5 text-[#f5f3ee] hover:bg-white/20"
+                >
+                  ↓
+                </button>
+                <div />
+              </div>
+              <div className="mb-2 flex items-center justify-between gap-1.5">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#8fa69e]">Size</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => (masterplanMode === "2d" ? resizeImage(0.95) : resize3D(0.95))}
+                    className="rounded bg-white/10 px-2.5 py-1 text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => (masterplanMode === "2d" ? resizeImage(1.05) : resize3D(1.05))}
+                    className="rounded bg-white/10 px-2.5 py-1 text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="mb-3 flex items-center justify-between gap-1.5">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#8fa69e]">Rotate</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => (masterplanMode === "2d" ? rotateImage(-1) : rotate3D(-1))}
+                    className="rounded bg-white/10 px-2.5 py-1 text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    ↺
+                  </button>
+                  <button
+                    onClick={() => (masterplanMode === "2d" ? rotateImage(1) : rotate3D(1))}
+                    className="rounded bg-white/10 px-2.5 py-1 text-[#f5f3ee] hover:bg-white/20"
+                  >
+                    ↻
+                  </button>
+                </div>
+              </div>
+              <div className="mb-2 font-mono text-[9px] leading-relaxed text-[#556661]">
+                {masterplanMode === "2d"
+                  ? `${calibImage.widthMeters}×${calibImage.heightMeters}m · ${calibImage.rotationDeg}° · E${calibImage.offsetE} N${calibImage.offsetN}`
+                  : `scale ${calib3D.scale} · ${calib3D.rotationDeg}° · E${calib3D.offsetE} N${calib3D.offsetN}`}
+              </div>
+              <button
+                onClick={() =>
+                  navigator.clipboard.writeText(
+                    masterplanMode === "2d"
+                      ? `masterplanImage: { url: "...", params: ${JSON.stringify(calibImage)} },`
+                      : `modelCalibration: ${JSON.stringify(calib3D)},`
+                  )
+                }
+                className="w-full rounded bg-white/10 px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5f3ee] hover:bg-white/20"
+              >
+                Copy config
+              </button>
+            </div>
+          )}
 
           {/* Prominent, real-progress feedback — the top-left badge alone was too easy to
               miss while the camera is mid-flyTo; on a slow connection the 28MB model load
               read as "nothing happened" rather than "loading". */}
-          {masterplanLoading && (
+          {masterplanMode === "3d" && masterplanLoading && (
             <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-[#070f0d]/35 backdrop-blur-[2px]">
               <div className="h-9 w-9 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
               <div className="flex flex-col items-center gap-2">
@@ -1178,8 +1823,9 @@ export default function ZoyaShowcase() {
         </>
       )}
 
-      {/* aerial gallery strip — real assets when present, honest placeholders otherwise */}
-      {stage === "hero" && (
+      {/* aerial gallery strip — Zoya-only real assets for now; no placeholders for other
+          projects (BEC), matching the video above. */}
+      {stage === "hero" && activeProjectId === ZOYA.id && (
         <div className="pointer-events-none absolute bottom-24 left-1/2 hidden -translate-x-1/2 gap-2 sm:flex">
           {ZOYA_AERIAL_PHOTOS.map((p) => (
             <ZoyaAsset

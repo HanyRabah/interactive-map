@@ -21,6 +21,50 @@ export const DEFAULT_IMAGE_MASTERPLAN_PARAMS: ImageMasterplanParams = {
   offsetN: 0,
 };
 
+const aspectCache = new Map<string, number>();
+
+/** Real width/height ratio of the image file — cached per URL, since it never changes. */
+export function getImageAspectRatio(url: string): Promise<number> {
+  const cached = aspectCache.get(url);
+  if (cached) return Promise.resolve(cached);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      aspectCache.set(url, ratio);
+      resolve(ratio);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// A drawn boundary's bounding box essentially never matches the source image's own pixel
+// aspect ratio — forcing both width and height to the box independently (what used to
+// happen here) stretches the image. This fits it inside the box instead, preserving the
+// real proportions: whichever dimension the box constrains tighter wins, the other shrinks
+// to match the image's true ratio.
+export function fitToAspect(boxWidth: number, boxHeight: number, aspect: number): { widthMeters: number; heightMeters: number } {
+  if (boxWidth / boxHeight > aspect) {
+    return { widthMeters: boxHeight * aspect, heightMeters: boxHeight };
+  }
+  return { widthMeters: boxWidth, heightMeters: boxWidth / aspect };
+}
+
+// Raster ("image" source) layers are never queryable via queryRenderedFeatures, so Mapbox's
+// layer-scoped click/hover events (map.on("click", layerId, ...)) silently never fire on
+// them — a map-wide click handler has to test the point itself instead.
+export function pointInQuad(point: [number, number], quad: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = quad.length - 1; i < quad.length; j = i++) {
+    const [xi, yi] = quad[i];
+    const [xj, yj] = quad[j];
+    const intersects = yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 function metersToLngLat(lng: number, lat: number, eastMeters: number, northMeters: number): [number, number] {
   const latDelta = northMeters / 111_320;
   const lngDelta = eastMeters / (111_320 * Math.cos((lat * Math.PI) / 180));

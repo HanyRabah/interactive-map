@@ -10,6 +10,8 @@ import {
   addImageMasterplanLayer,
   updateImageMasterplanLayer,
   removeImageMasterplanLayer,
+  getImageAspectRatio,
+  fitToAspect,
   type ImageMasterplanParams,
   DEFAULT_IMAGE_MASTERPLAN_PARAMS,
 } from "./ImageMasterplanLayer";
@@ -121,12 +123,18 @@ export const PROJECTS: Project[] = [
     // open the "3D Lagoon" button and tune via the Calibrate panel against real imagery.
     lagoonModel: { url: "/models/zoya-lagoon.glb" },
     lagoonCalibration: { scale: 1, rotationDeg: 0, offsetE: 0, offsetN: 0, offsetUp: 0 },
-    // ponytail: placeholder graphic — swap for the real branded masterplan image (the
-    // kind shown draped over a map on the developer's own site) and tune params via
-    // the calibration panel the same way as the 3D model.
+    // Real branded masterplan graphic (client-supplied "Masterplan.png", 6000x6000
+    // 16-bit PNG at 46.9MB — re-encoded to 4096x4096 WebP q92 with alpha preserved,
+    // 1.49MB, verified still exactly square (no distortion from the re-encode);
+    // original kept at assets-src/zoya/Masterplan-original.png, outside public/ so
+    // it's never served or committed. widthMeters/heightMeters are square (matching
+    // the source PNG's real 1:1 aspect ratio) on purpose — an earlier version forced
+    // it into the boundary's raw 1748x839 rotated-rect and stretched it. These exact
+    // numbers were hand-tuned via the in-app "Adjust position" panel (nudge/resize/
+    // rotate) against the satellite imagery and copied from there, not recomputed.
     masterplanImage: {
-      url: placeholderPhoto("#0c4a6e", "#38bdf8", "Zoya Ghazala Bay — Masterplan"),
-      params: { widthMeters: 700, heightMeters: 500, rotationDeg: 0, offsetE: 0, offsetN: 0 },
+      url: "/media/zoya/masterplan.webp",
+      params: { widthMeters: 1826, heightMeters: 1826, rotationDeg: -0.3, offsetE: -88, offsetN: -498 },
     },
     // Surveyed site outline (Nawy listings data), not hand-traced — use the "Use Site
     // Boundary" button to derive accurate width/height/rotation for both masterplans.
@@ -139,6 +147,21 @@ export const PROJECTS: Project[] = [
       [28.590273, 31.023729], [28.589903, 31.022437], [28.587975, 31.022364], [28.588137, 31.021348],
       [28.58864, 31.019333], [28.588675, 31.017476], [28.587879, 31.015681], [28.588277, 31.014311],
     ],
+  },
+  {
+    id: "bec",
+    name: "BEC",
+    developer: "LMD",
+    country: "Egypt",
+    countryCode: "EG",
+    lng: 34.757373,
+    lat: 28.067182,
+    // Real Sketchfab photogrammetry export (v1_-_bec.glb), the original 88.17MB file with an
+    // 8192x8192 baked texture — kept un-optimized at the user's request instead of the
+    // gltf-transform-compressed 1.84MB version, so expect a slower first load.
+    model: { url: "/models/bec.glb" },
+    // User-calibrated against real site imagery via the Calibrate panel.
+    modelCalibration: { scale: 9.366, rotationDeg: -104, offsetE: -15, offsetN: 90, offsetUp: 0 },
   },
   { id: "swan-lake", name: "Swan Lake, Sheikh Zayed", developer: "Hassan Allam", country: "Egypt", countryCode: "EG", lng: 30.9421, lat: 30.0426 },
   { id: "dubai-hills", name: "Dubai Hills Estate", developer: "Emaar", country: "UAE", countryCode: "AE", lng: 55.2497, lat: 25.1124 },
@@ -318,11 +341,12 @@ export default function GlobePortfolioMap() {
     imageMasterplanId.current = layerId;
     setCalibImage(params);
     setImageMasterplanOpen(true);
-    m.easeTo({ pitch: 0, bearing: 0, duration: 900 });
-    window.setTimeout(() => {
-      const { sw, ne } = boundsAround(p.lng, p.lat, Math.max(params.widthMeters, params.heightMeters) / 2 + 100);
-      m.fitBounds([sw, ne], { padding: 60, duration: 1200 });
-    }, 300);
+    // Unlike the compare-mode overlay (plain HTML, only reads correctly top-down), this
+    // is a real georeferenced Mapbox "image" source — it projects correctly at any pitch/
+    // bearing, so there's no need to flatten the camera; fitBounds keeps whatever tilt the
+    // map is already at.
+    const { sw, ne } = boundsAround(p.lng, p.lat, Math.max(params.widthMeters, params.heightMeters) / 2 + 100);
+    m.fitBounds([sw, ne], { padding: 60, duration: 1200 });
   }
 
   function updateCalibImage(p: Project, next: ImageMasterplanParams) {
@@ -462,12 +486,17 @@ export default function GlobePortfolioMap() {
     renderBoundaryDraw([]);
   }
 
-  function applyBoundaryToImage(p: Project) {
+  async function applyBoundaryToImage(p: Project) {
     if (!boundaryResult || !p.masterplanImage) return;
     const { rect, centroidMeters } = boundaryResult;
+    // The drawn box's aspect ratio essentially never matches the real image's own — fitting
+    // both dimensions to it independently stretched the graphic. fitToAspect keeps the real
+    // proportions and shrinks whichever side the box doesn't tightly constrain.
+    const aspect = await getImageAspectRatio(p.masterplanImage.url).catch(() => rect.width / rect.height);
+    const { widthMeters, heightMeters } = fitToAspect(rect.width, rect.height, aspect);
     const next: ImageMasterplanParams = {
-      widthMeters: Math.round(rect.width),
-      heightMeters: Math.round(rect.height),
+      widthMeters: Math.round(widthMeters),
+      heightMeters: Math.round(heightMeters),
       rotationDeg: Math.round(rect.angleDeg * 10) / 10,
       offsetE: Math.round(centroidMeters[0]),
       offsetN: Math.round(centroidMeters[1]),

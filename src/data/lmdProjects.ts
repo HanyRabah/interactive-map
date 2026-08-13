@@ -18,6 +18,10 @@ export const LMD_PROJECTS: LmdProjectStub[] = [
   { id: "mindset", name: "Mindset", country: "Egypt", lngLat: [30.9756, 30.0131], precision: "district" }, // Sheikh Zayed City
   { id: "8ight", name: "8ight", country: "Egypt" }, // area not confirmed — no pin
   { id: "zoya", name: "Zoya", country: "Egypt", href: "/", lngLat: [28.595006, 31.024578], precision: "exact" },
+  // Not from the lmd.com.eg scrape (not publicly listed there) — coordinates and 3D model
+  // supplied directly, id matches its PROJECTS entry in GlobePortfolioMap.tsx exactly (no
+  // "zoya"-vs-"zoya-ghazala-bay"-style alias needed).
+  { id: "bec", name: "BEC", country: "Egypt", href: "/", lngLat: [34.757373, 28.067182], precision: "exact" },
   { id: "one-ninety", name: "One Ninety", country: "Egypt", lngLat: [31.4025592, 30.0133243], precision: "exact" },
   { id: "3sixty", name: "3'Sixty", country: "Egypt", lngLat: [31.49, 30.03], precision: "district" }, // New Cairo
   { id: "layan", name: "Layan", country: "Egypt" }, // area not confirmed — no pin
