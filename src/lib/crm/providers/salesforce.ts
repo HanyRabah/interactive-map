@@ -1,0 +1,203 @@
+import type { InventoryProvider } from "../provider";
+import type { ClusterSummary, Lead, Shortlist, Unit, UnitStatus } from "../types";
+
+// Real Salesforce adapter, built for the showcase org (see docs/salesforce/setup.md for
+// the org-side setup: Unit__c custom object, Connected App with the Client Credentials
+// flow, seed CSV import). Server-side only — the client secret lives in env vars or the
+// CMS (admin-only), and every call happens inside API routes, never in the browser bundle.
+//
+// Config comes from the constructor — one instance per connected org, so different
+// projects can point at different clients' Salesforce orgs (see getProviderForProject in
+// ../index.ts). fromEnv() builds the global-default instance from:
+//   SF_INSTANCE_URL   https://<your-org>.my.salesforce.com  (My Domain URL, no trailing /)
+//   SF_CLIENT_ID      Connected App consumer key
+//   SF_CLIENT_SECRET  Connected App consumer secret
+//   SF_CURRENCY       display currency for Price__c (defaults to USD — a Dev Edition
+//                     org's default; set EGP/AED if you changed the org currency)
+
+const API_VERSION = "v62.0";
+
+export type SalesforceConfig = {
+  instanceUrl: string;
+  clientId: string;
+  clientSecret: string;
+  /** Display currency for Price__c (the org's currency). */
+  currency?: string;
+  /**
+   * Maps the map's projectId → the org's Project_Id__c value. A client's org may key
+   * units by its own codes ("BAYN-GH01") rather than our slugs; identity when omitted.
+   */
+  externalProjectId?: (projectId: string) => string;
+};
+
+type SfUnitRecord = {
+  Name: string;
+  Project_Id__c: string;
+  Cluster__c: string;
+  Status__c: string;
+  Price__c: number | null;
+  Bedrooms__c: number | null;
+  Area_Sqm__c: number | null;
+};
+
+function env(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`SalesforceProvider: missing env var ${name} (see docs/salesforce/setup.md)`);
+  return v;
+}
+
+/** Global-default instance config, read from SF_* env vars (the pre-CMS single-org mode). */
+export function salesforceConfigFromEnv(): SalesforceConfig {
+  return {
+    instanceUrl: env("SF_INSTANCE_URL"),
+    clientId: env("SF_CLIENT_ID"),
+    clientSecret: env("SF_CLIENT_SECRET"),
+    currency: process.env.SF_CURRENCY,
+  };
+}
+
+/** SOQL string literal escape — quotes and backslashes only; SOQL has no other escapes in literals. */
+function soqlEscape(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function toStatus(raw: string | null | undefined): UnitStatus {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "reserved") return "reserved";
+  if (s === "sold") return "sold";
+  return "available";
+}
+
+export class SalesforceProvider implements InventoryProvider {
+  readonly id = "salesforce";
+
+  constructor(private config: SalesforceConfig) {}
+
+  // Access token cached until Salesforce rejects it (~2h sessions by default); on a 401
+  // we refresh once and retry rather than tracking expiry client-side.
+  private token: string | null = null;
+
+  private async fetchToken(): Promise<string> {
+    const res = await fetch(`${this.config.instanceUrl}/services/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: this.config.clientId,
+        client_secret: this.config.clientSecret,
+      }),
+    });
+    if (!res.ok) throw new Error(`Salesforce token request failed: ${res.status} ${await res.text()}`);
+    const data = (await res.json()) as { access_token: string };
+    this.token = data.access_token;
+    return data.access_token;
+  }
+
+  /** Authenticated call with one automatic re-auth retry on 401. */
+  private async sf(path: string, init?: RequestInit): Promise<Response> {
+    const call = async (token: string) =>
+      fetch(`${this.config.instanceUrl}${path}`, {
+        ...init,
+        headers: { ...init?.headers, Authorization: `Bearer ${token}` },
+      });
+
+    let res = await call(this.token ?? (await this.fetchToken()));
+    if (res.status === 401) res = await call(await this.fetchToken());
+    return res;
+  }
+
+  private async query<T>(soql: string): Promise<T[]> {
+    const res = await this.sf(`/services/data/${API_VERSION}/query?q=${encodeURIComponent(soql)}`);
+    if (!res.ok) throw new Error(`Salesforce query failed: ${res.status} ${await res.text()}`);
+    const data = (await res.json()) as { records: T[]; done: boolean; nextRecordsUrl?: string };
+    // Showcase orgs hold a few hundred units; a real multi-thousand-unit org would follow
+    // nextRecordsUrl pages here.
+    return data.records;
+  }
+
+  private mapUnit(r: SfUnitRecord): Unit {
+    return {
+      id: r.Name,
+      projectId: r.Project_Id__c,
+      cluster: r.Cluster__c,
+      status: toStatus(r.Status__c),
+      price: r.Price__c != null ? { amount: r.Price__c, currency: this.config.currency ?? "USD" } : undefined,
+      bedrooms: r.Bedrooms__c ?? undefined,
+      areaSqm: r.Area_Sqm__c ?? undefined,
+    };
+  }
+
+  async listUnits(projectId: string): Promise<Unit[]> {
+    const externalId = this.config.externalProjectId?.(projectId) ?? projectId;
+    const records = await this.query<SfUnitRecord>(
+      `SELECT Name, Project_Id__c, Cluster__c, Status__c, Price__c, Bedrooms__c, Area_Sqm__c ` +
+      `FROM Unit__c WHERE Project_Id__c = '${soqlEscape(externalId)}' ORDER BY Name`
+    );
+    return records.map((r) => this.mapUnit(r));
+  }
+
+  async getUnit(unitId: string): Promise<Unit | null> {
+    const records = await this.query<SfUnitRecord>(
+      `SELECT Name, Project_Id__c, Cluster__c, Status__c, Price__c, Bedrooms__c, Area_Sqm__c ` +
+      `FROM Unit__c WHERE Name = '${soqlEscape(unitId)}' LIMIT 1`
+    );
+    return records.length ? this.mapUnit(records[0]) : null;
+  }
+
+  async listClusters(projectId: string): Promise<ClusterSummary[]> {
+    // A few hundred rows per project — aggregate in JS rather than juggling grouped SOQL
+    // with per-status counts. Revisit if a client's org holds thousands of units.
+    const units = await this.listUnits(projectId);
+    const byCluster = new Map<string, { total: number; available: number }>();
+    for (const u of units) {
+      const entry = byCluster.get(u.cluster) ?? { total: 0, available: 0 };
+      entry.total += 1;
+      if (u.status === "available") entry.available += 1;
+      byCluster.set(u.cluster, entry);
+    }
+    return Array.from(byCluster, ([cluster, v]) => ({ cluster, ...v }));
+  }
+
+  async createLead(lead: Lead): Promise<{ id: string }> {
+    // Standard Lead object. Company is required by Salesforce — for a consumer real-estate
+    // enquiry there is no company, so the conventional placeholder is the lead's own name.
+    const description = [
+      lead.message,
+      lead.unitId && `Unit: ${lead.unitId}`,
+      lead.shortlist?.length && `Shortlist: ${lead.shortlist.join(", ")}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const res = await this.sf(`/services/data/${API_VERSION}/sobjects/Lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        LastName: lead.contactName,
+        Company: lead.contactName,
+        Email: lead.email,
+        Phone: lead.phone,
+        Description: description || undefined,
+        LeadSource: "DP Interactive",
+      }),
+    });
+    if (!res.ok) throw new Error(`Salesforce lead create failed: ${res.status} ${await res.text()}`);
+    const data = (await res.json()) as { id: string };
+    return { id: data.id };
+  }
+
+  // Shortlists stay in-memory for the showcase — syncing them to a Contact-linked custom
+  // object is the phase-3 write integration (see the ORA proposal's build plan), and the
+  // showcase demo doesn't need it: the impressive moments are live availability and the
+  // lead landing in Salesforce.
+  private shortlists = new Map<string, Set<string>>();
+
+  async getShortlist(contactId: string): Promise<Shortlist> {
+    const set = this.shortlists.get(contactId) ?? new Set<string>();
+    return { contactId, unitIds: Array.from(set) };
+  }
+
+  async saveShortlist(contactId: string, unitIds: string[]): Promise<void> {
+    this.shortlists.set(contactId, new Set(unitIds));
+  }
+}

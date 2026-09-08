@@ -21,7 +21,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   review, the verdict, and DESIGN.md.
 */
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -50,8 +50,7 @@ import type { JourneyImagerySource } from "@/app/api/journey-imagery/route";
 import type { DefaultImagerySource } from "@/app/api/default-imagery/route";
 import { createAtmosphereLayer, type AtmosphereLayer } from "./AtmosphereLayer";
 import { PROJECTS } from "./GlobePortfolioMap";
-import { ZoyaAsset } from "./ZoyaAsset";
-import { ZOYA_HERO_VIDEO, ZOYA_AERIAL_PHOTOS, ZOYA_AERIAL_DIR } from "@/data/zoyaMedia";
+import { ZOYA_HERO_VIDEO } from "@/data/zoyaMedia";
 import { LMD_PROJECTS, type LmdProjectStub } from "@/data/lmdProjects";
 
 const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")!;
@@ -60,7 +59,18 @@ const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")!;
 // an invented accent. LMD's own brand mark is plain black/white; this teal is Zoya-specific.
 const ACCENT = "#1c93a0";
 
-const COUNTRIES_ORDER = ["Egypt", "UAE", "Spain", "Greece"] as const;
+// Which client's experience this showcase renders — /[client] routes pass a brand built
+// from the catalog; the bare `/` route defaults to LMD, today's flagship. Everything
+// client-specific (wordmark, roster, dropdown label) flows from here.
+export type ClientBrand = {
+  slug: string;
+  name: string;
+  /** Light/white wordmark for dark backgrounds; text wordmark renders when absent. */
+  logoUrl?: string;
+  roster: LmdProjectStub[];
+};
+
+const LMD_BRAND: ClientBrand = { slug: "lmd", name: "LMD", logoUrl: "/brand/lmd-logo-white.png", roster: LMD_PROJECTS };
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
 // Lower pitch than a typical "cinematic" establishing shot on purpose: at this specific
@@ -86,14 +96,25 @@ const HERO_ZOOM_BY_PRECISION: Record<NonNullable<LmdProjectStub["precision"]>, n
 // masterplan flow below instead of the honest "comingsoon" placeholder.
 type ShowcaseProject = (typeof PROJECTS)[number];
 
+// Every hand-tuned pitch/zoom above was verified against a wide desktop viewport. A pitched
+// camera keeps the target lng/lat anchored to screen-center regardless of aspect ratio, but
+// a tall narrow (portrait phone) frame shows proportionally far less width — the same shot
+// that reads as "establishing" on desktop reads as "site crammed in a corner, mostly empty
+// sea/sky" on mobile. Pulling pitch down and zooming out slightly on narrow viewports fills
+// the frame with more of the actual site instead of empty horizon.
+function adjustForViewport<T extends { zoom: number; pitch: number }>(view: T): T {
+  if (typeof window === "undefined" || window.innerWidth >= 640) return view;
+  return { ...view, zoom: view.zoom - 1.1, pitch: Math.max(0, view.pitch - 20) };
+}
+
 // Zoya alone got a hand-tuned, screenshot-verified camera pass; every other real project
 // (BEC today, more later) shares one reasonable generic angle instead of guessing a new
 // one per site.
 function viewsFor(id: string) {
-  if (id === ZOYA.id) return { hero: HERO_VIEW, masterplan: MASTERPLAN_VIEW };
+  if (id === ZOYA.id) return { hero: adjustForViewport(HERO_VIEW), masterplan: adjustForViewport(MASTERPLAN_VIEW) };
   return {
-    hero: { zoom: HERO_ZOOM_BY_PRECISION.exact, pitch: GENERIC_HERO_VIEW.pitch, bearing: GENERIC_HERO_VIEW.bearing },
-    masterplan: { zoom: 17, pitch: 55, bearing: -20 },
+    hero: adjustForViewport({ zoom: HERO_ZOOM_BY_PRECISION.exact, pitch: GENERIC_HERO_VIEW.pitch, bearing: GENERIC_HERO_VIEW.bearing }),
+    masterplan: adjustForViewport({ zoom: 17, pitch: 55, bearing: -20 }),
   };
 }
 
@@ -119,9 +140,7 @@ function placeholderPhoto(seed: string, label: string) {
 
 type Stage = "logo" | "split" | "focus" | "flight" | "hero" | "masterplan" | "comingsoon";
 
-const PINNED_PROJECTS = LMD_PROJECTS.filter(
-  (p): p is LmdProjectStub & { lngLat: [number, number] } => !!p.lngLat,
-);
+
 
 // Rest-state padding, as a fraction of viewport width, for the split layout — pulls the
 // globe and the logo panel in toward the shared center line instead of each sitting
@@ -242,7 +261,16 @@ const BLACK_MARBLE_TILE_URL =
   "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg";
 const BLACK_MARBLE_LAYER_ID = "black-marble";
 
-export default function ZoyaShowcase() {
+export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBrand } = {}) {
+  const roster = brand.roster;
+  const pinnedProjects = useMemo(
+    () => roster.filter((p): p is LmdProjectStub & { lngLat: [number, number] } => !!p.lngLat),
+    [roster]
+  );
+  // Dropdown grouping order = first-appearance order in the roster (matches the old
+  // hardcoded COUNTRIES_ORDER for LMD's own roster).
+  const countries = useMemo(() => Array.from(new Set(roster.map((p) => p.country))), [roster]);
+
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const spinning = useRef(true);
@@ -300,6 +328,18 @@ export default function ZoyaShowcase() {
     toolsKeyRef.current = params.get("tools");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToolsEnabled(params.has("tools"));
+  }, []);
+
+  // Reactive (unlike adjustForViewport's one-time synchronous read at click-time) — the
+  // logo panel below needs an actual render-time value, since its position is computed as
+  // inline style rather than pure Tailwind classes.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
   }, []);
 
   // Warm the browser's HTTP cache for every real project's masterplan assets as soon as the
@@ -419,9 +459,9 @@ export default function ZoyaShowcase() {
   const [focusPanelVisible, setFocusPanelVisible] = useState(false);
   const [focusPanelMounted, setFocusPanelMounted] = useState(false);
 
-  const selectedProject = selectedPinId === "zoya" ? { name: "Zoya", country: "Egypt" } : LMD_PROJECTS.find((p) => p.id === selectedPinId);
+  const selectedProject = selectedPinId === "zoya" ? { name: "Zoya", country: "Egypt" } : roster.find((p) => p.id === selectedPinId);
   const selectedLngLat: [number, number] | undefined =
-    selectedPinId === "zoya" ? [ZOYA.lng, ZOYA.lat] : LMD_PROJECTS.find((p) => p.id === selectedPinId)?.lngLat;
+    selectedPinId === "zoya" ? [ZOYA.lng, ZOYA.lat] : roster.find((p) => p.id === selectedPinId)?.lngLat;
   const selectedCoordsTarget = selectedLngLat
     ? `${Math.abs(selectedLngLat[1]).toFixed(4)}°${selectedLngLat[1] >= 0 ? "N" : "S"}, ${Math.abs(selectedLngLat[0]).toFixed(4)}°${selectedLngLat[0] >= 0 ? "E" : "W"}`
     : "";
@@ -478,7 +518,7 @@ export default function ZoyaShowcase() {
   function createPins() {
     const m = map.current;
     if (!m || pinMarkers.current.size > 0) return;
-    PINNED_PROJECTS.forEach((p, i) => {
+    pinnedProjects.forEach((p, i) => {
       // Four DOM levels on purpose (see globals.css comment above .lmd-pin-pop-wrap):
       // `host` is Mapbox's own positioned element (untouched), `popWrap` carries the
       // one-shot entrance keyframe, `content` carries the dissolve fade + click/hover, and
@@ -552,7 +592,7 @@ export default function ZoyaShowcase() {
       beginFlight();
       return;
     }
-    const project = LMD_PROJECTS.find((p) => p.id === selectedPinId);
+    const project = roster.find((p) => p.id === selectedPinId);
     const lngLat = project?.lngLat;
     if (!lngLat) return;
     // Same real-coordinate flight Zoya gets (see GENERIC_HERO_VIEW above) — no calibrated
@@ -624,7 +664,10 @@ export default function ZoyaShowcase() {
       pitch: 0,
       attributionControl: false,
     });
-    m.setPadding({ left: startWidth * 0.5, right: 0, top: 0, bottom: 0 });
+    // On mobile the logo no longer docks to a side (see the persistent top-center panel
+    // below) — nothing to make room for, so the globe stays centered instead of shifted
+    // right under half the screen's width of dead padding.
+    m.setPadding({ left: startWidth < 640 ? 0 : startWidth * 0.5, right: 0, top: 0, bottom: 0 });
 
     m.on("style.load", () => {
       m.setFog(introFog());
@@ -770,6 +813,10 @@ export default function ZoyaShowcase() {
     const m = map.current;
     if (!m || !loaded) return;
     const w = mapContainer.current?.clientWidth ?? window.innerWidth;
+    // On mobile the logo/details panels dock to the top/bottom instead of the side (see
+    // the persistent logo panel and the focus panel below), so there's no side column to
+    // clear space for — the globe stays centered instead of pushed toward one edge.
+    const sidePadding = w < 640 ? 0 : w * SPLIT_PADDING_FRACTION;
     // These stages have no time-of-day of their own — night gets the fixed starry intro
     // preset (independent of whatever the hero day/night slider last left behind — e.g.
     // returning here from "comingsoon" should restore real space, not a daylit sky); day
@@ -786,7 +833,7 @@ export default function ZoyaShowcase() {
     if (stage === "split") {
       m.easeTo({
         zoom: 1.6,
-        padding: { left: w * SPLIT_PADDING_FRACTION, right: 0, top: 0, bottom: 0 },
+        padding: { left: sidePadding, right: 0, top: 0, bottom: 0 },
         duration: 1600,
         // Standard ease-out cubic: starts moving immediately (no held-still opening beat)
         // and decelerates into rest — reads as quick and deliberate rather than the previous
@@ -802,7 +849,7 @@ export default function ZoyaShowcase() {
       m.easeTo({
         ...(selectedLngLat ? { center: selectedLngLat } : {}),
         zoom: 2.15,
-        padding: { left: 0, right: w * SPLIT_PADDING_FRACTION, top: 0, bottom: 0 },
+        padding: { left: 0, right: sidePadding, top: 0, bottom: 0 },
         duration: 1400,
       });
       // The panel (title + coords + button) only fades in once the globe has actually
@@ -1268,7 +1315,7 @@ export default function ZoyaShowcase() {
       backToOverview();
       return;
     }
-    const proj = LMD_PROJECTS.find((p) => p.id === id);
+    const proj = roster.find((p) => p.id === id);
     if (!proj?.lngLat) {
       setSwitcherNotice(`${proj?.name ?? "This project"} — full interactive experience coming soon`);
       window.setTimeout(() => setSwitcherNotice(null), 2600);
@@ -1368,7 +1415,7 @@ export default function ZoyaShowcase() {
           hero/masterplan only ever show the real day satellite photo; no separate control
           once a journey actually starts. */}
       {(stage === "split" || stage === "focus") && (
-        <div className="absolute bottom-5 right-5 z-20 flex items-center gap-1 rounded-full border border-white/10 bg-[#0a1614]/90 p-1 backdrop-blur">
+        <div className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-20 hidden items-center gap-1 rounded-full border border-white/10 bg-[#0a1614]/90 p-1 backdrop-blur sm:flex">
           <button
             onClick={() => setIntroNight(true)}
             className={`rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
@@ -1400,9 +1447,12 @@ export default function ZoyaShowcase() {
         </div>
       )}
 
-      {/* LOGO — LMD's real wordmark, first thing shown on black. Never unmounts: it docks to
-          the left as the globe arrives (split), then exits further left once a pin is picked
-          (focus) — a real move, not a vanish. */}
+      {/* LOGO — LMD's real wordmark, first thing shown on black. Never unmounts: on desktop
+          it docks to the left as the globe arrives (split), then exits further left once a
+          pin is picked (focus) — a real move, not a vanish. On mobile there's no side
+          column to dock into (the globe stays centered, see sidePadding above; the focus
+          panel moves to the bottom, see below) — it settles into a small top-center mark
+          instead of sliding, and just stays there rather than exiting. */}
       {MAPBOX_TOKEN && (
         <div
           onClick={stage === "logo" ? advanceFromLogo : undefined}
@@ -1416,29 +1466,50 @@ export default function ZoyaShowcase() {
           onClick={stage === "logo" ? advanceFromLogo : undefined}
           role={stage === "logo" ? "button" : undefined}
           aria-label={stage === "logo" ? "Skip intro" : undefined}
-          style={{
-            left: stage === "logo" ? "50%" : "32%",
-            transform: `translate(-50%, -50%) translateX(${stage === "logo" || stage === "split" ? "0" : "-140%"})`,
-            // Fades in place (no slide) when a manual zoom brings the globe close enough to
-            // collide with the panel — the stage-driven slide-exit above is unaffected.
-            opacity: stage === "logo" || (stage === "split" && !logoZoomHidden) ? 1 : 0,
-            transition: "left 1400ms ease-out, transform 1400ms ease-out, opacity 1000ms ease-out",
-          }}
-          className={`absolute top-1/2 z-30 flex flex-col gap-6 ${
+          style={
+            isMobile && stage !== "logo"
+              ? { top: "1.25rem", left: "50%", transform: "translate(-50%, 0)", opacity: 1, transition: "opacity 500ms ease-out" }
+              : {
+                  left: stage === "logo" ? "50%" : "32%",
+                  transform: `translate(-50%, -50%) translateX(${stage === "logo" || stage === "split" ? "0" : "-140%"})`,
+                  // Fades in place (no slide) when a manual zoom brings the globe close enough to
+                  // collide with the panel — the stage-driven slide-exit above is unaffected.
+                  opacity: stage === "logo" || (stage === "split" && !logoZoomHidden) ? 1 : 0,
+                  transition: "left 1400ms ease-out, transform 1400ms ease-out, opacity 1000ms ease-out",
+                }
+          }
+          className={`absolute top-1/2 z-30 flex flex-col ${isMobile && stage !== "logo" ? "gap-1.5" : "gap-6"} ${
             stage === "logo" ? "cursor-pointer items-center text-center" : "pointer-events-none items-start text-left"
-          }`}
+          } ${isMobile ? "items-center text-center" : ""}`}
         >
           <div
             className={`transition-all duration-1000 ease-out ${
               logoVisible ? "scale-100 opacity-100" : "scale-90 opacity-0"
             }`}
           >
-            <Image src="/brand/lmd-logo-white.png" alt="LMD" width={378} height={157} priority className="h-14 w-auto sm:h-20" />
+            {brand.logoUrl ? (
+              <Image
+                src={brand.logoUrl}
+                alt={brand.name}
+                width={378}
+                height={157}
+                priority
+                className={`w-auto ${isMobile && stage !== "logo" ? "h-6" : "h-14 sm:h-20"}`}
+              />
+            ) : (
+              /* No uploaded wordmark yet — a typographic one keeps the intro intact
+                 for any client the moment their projects exist. */
+              <span
+                className={`font-bold tracking-[0.2em] text-[#f5f3ee] ${isMobile && stage !== "logo" ? "text-xl" : "text-5xl sm:text-6xl"}`}
+              >
+                {brand.name}°
+              </span>
+            )}
           </div>
           <span
-            className={`font-mono text-[10px] uppercase tracking-[0.4em] text-[#8fa69e] transition-opacity delay-500 duration-1000 ${
+            className={`font-mono uppercase tracking-[0.4em] text-[#8fa69e] transition-opacity delay-500 duration-1000 ${
               logoVisible ? "opacity-100" : "opacity-0"
-            }`}
+            } ${isMobile && stage !== "logo" ? "text-[7px] tracking-[0.25em]" : "text-[10px]"}`}
           >
             Digital Sales Experience
           </span>
@@ -1480,14 +1551,20 @@ export default function ZoyaShowcase() {
 
       {/* Persistent brand anchor, top-left, every stage past the logo — matches how LMD keeps
           its own mark pinned in their site nav. Opacity-driven (not conditionally-mounted) so
-          a manual zoom-in/out during "split" fades it rather than popping it. */}
-      {stage !== "logo" && (
+          a manual zoom-in/out during "split" fades it rather than popping it. Hidden on
+          mobile: the logo panel above already stays pinned top-CENTER there instead of
+          sliding away, so this would just be a second, redundant logo. */}
+      {stage !== "logo" && !isMobile && (
         <div
           className={`pointer-events-none absolute left-5 top-5 z-20 transition-opacity duration-500 ${
             showBrandMark ? "opacity-100" : "opacity-0"
           }`}
         >
-          <Image src="/brand/lmd-logo-white.png" alt="LMD" width={378} height={157} className="h-5 w-auto opacity-90" />
+          {brand.logoUrl ? (
+            <Image src={brand.logoUrl} alt={brand.name} width={378} height={157} className="h-5 w-auto opacity-90" />
+          ) : (
+            <span className="text-sm font-bold tracking-[0.2em] text-[#f5f3ee] opacity-90">{brand.name}°</span>
+          )}
         </div>
       )}
 
@@ -1526,13 +1603,13 @@ export default function ZoyaShowcase() {
             onClick={() => setSwitcherOpen((v) => !v)}
             className="rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40"
           >
-            LMD Projects {switcherOpen ? "▴" : "▾"}
+            {brand.name} Projects {switcherOpen ? "▴" : "▾"}
           </button>
 
           {switcherOpen && (
             <div className="absolute right-0 top-11 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-white/15 bg-[#0a1614]/97 p-3 shadow-2xl backdrop-blur">
-              {COUNTRIES_ORDER.map((country) => {
-                const projects = LMD_PROJECTS.filter((p) => p.country === country);
+              {countries.map((country) => {
+                const projects = roster.filter((p) => p.country === country);
                 if (projects.length === 0) return null;
                 return (
                   <div key={country} className="mb-3 last:mb-0">
@@ -1576,8 +1653,13 @@ export default function ZoyaShowcase() {
           mostly resolved. */}
       {focusPanelMounted && selectedPinId && loaded && MAPBOX_TOKEN && (
         <div
-          className="absolute top-1/2 z-30 flex max-w-md flex-col items-start gap-4 transition-opacity duration-500"
-          style={{ left: "68%", transform: "translate(-50%, -50%)", opacity: focusPanelVisible ? 1 : 0 }}
+          // On mobile this sits bottom-center instead of vertically centered at left:68% —
+          // the globe now stays centered too (see sidePadding above), so there's no side
+          // column reserved for it, and a shrink-to-fit box anchored only by `left` clamps
+          // to a tiny width on a narrow phone (see the old comment this replaced) whether or
+          // not the globe makes room. sm: restores the original desktop composition.
+          className="absolute inset-x-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] top-auto z-30 flex max-w-md flex-col items-center gap-4 text-center transition-opacity duration-500 sm:inset-x-auto sm:bottom-auto sm:left-[68%] sm:top-1/2 sm:w-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:items-start sm:text-left"
+          style={{ opacity: focusPanelVisible ? 1 : 0 }}
         >
           {/* The globe underneath is real satellite/night-lights imagery, not a solid
               backdrop — light terrain (desert, city lights) can land directly behind this
@@ -1638,20 +1720,25 @@ export default function ZoyaShowcase() {
           </div>
 
           {selectedPinId && (
-            <div className="pointer-events-none absolute bottom-24 left-1/2 hidden -translate-x-1/2 gap-2 sm:flex">
+            // Was `hidden sm:flex` — invisible on mobile entirely. A fixed-width centered
+            // flex row has nowhere to put 3 thumbnails on a 375px screen without colliding
+            // with the coming-soon panel below, so it's a horizontally-scrollable strip
+            // there instead (inset-x-4, its own bounded width) and only becomes the
+            // intrinsic-width centered row once there's room, at sm:.
+            <div className="absolute inset-x-4 bottom-24 flex gap-2 overflow-x-auto sm:inset-x-auto sm:left-1/2 sm:w-auto sm:-translate-x-1/2 sm:overflow-visible">
               {["Aerial view", "Site overview", "Community"].map((label) => (
                 // eslint-disable-next-line @next/next/no-img-element -- generated data: URI, next/image optimization doesn't apply
                 <img
                   key={label}
                   src={placeholderPhoto(`${selectedPinId}-${label}`, label)}
                   alt={`${selectedProject?.name} — placeholder, real photography pending`}
-                  className="h-14 w-20 rounded border border-white/10 object-cover"
+                  className="h-14 w-20 shrink-0 rounded border border-white/10 object-cover"
                 />
               ))}
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-8 flex flex-col items-center gap-3">
+          <div className="absolute inset-x-0 bottom-[calc(2rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-3">
             <div className="rounded-lg border border-white/15 bg-[#0a1614]/90 px-6 py-3 text-center backdrop-blur">
               <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e]">
                 Full interactive experience coming soon — imagery shown is placeholder
@@ -1679,7 +1766,7 @@ export default function ZoyaShowcase() {
             {activeProject.lat.toFixed(4)}°N, {Math.abs(activeProject.lng).toFixed(4)}°E
           </div>
 
-          <div className="absolute inset-x-0 bottom-8 flex flex-col items-center gap-4">
+          <div className="absolute inset-x-0 bottom-[calc(2rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-4">
             <button
               onClick={openMasterplan}
               className="rounded-full border bg-[#0a1614]/80 px-6 py-2.5 font-mono text-[11px] uppercase tracking-[0.25em] text-[#f5f3ee] backdrop-blur transition-colors"
@@ -1702,15 +1789,22 @@ export default function ZoyaShowcase() {
       {/* MASTERPLAN */}
       {stage === "masterplan" && (
         <>
-          <div className="absolute left-5 top-16 flex items-center gap-3">
+          {/* One row spanning the full width (left-5 to right-5), not two independently-
+              positioned absolute blocks — two blocks left the status pill overlapping (and
+              blocking clicks on) "← Overview" on mobile. On mobile it's a single
+              horizontally-scrollable strip (no-scrollbar, shrink-0 items) instead of
+              wrapping to 2-3 stacked rows of pills, which ate a large chunk of the screen
+              before any masterplan was visible; sm: restores the wrapped desktop layout,
+              which has the width to spare. */}
+          <div className="no-scrollbar absolute left-5 right-5 top-16 flex flex-nowrap items-center gap-3 overflow-x-auto sm:flex-wrap sm:overflow-visible">
             <button
               onClick={backToOverview}
-              className="rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+              className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
             >
               ← Overview
             </button>
             {masterplanMode === "3d" && (
-              <span className="rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
+              <span className="shrink-0 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
                 {masterplanLoading
                   ? `Loading model… ${Math.round(masterplanProgress * 100)}%`
                   : `${buildings.length} buildings mapped`}
@@ -1722,7 +1816,7 @@ export default function ZoyaShowcase() {
             {activeProject.masterplanImage && activeProject.model && (
               <button
                 onClick={toggleMasterplanMode}
-                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
               >
                 {masterplanMode === "2d" ? "View in 3D" : "View 2D Masterplan"}
               </button>
@@ -1730,7 +1824,7 @@ export default function ZoyaShowcase() {
             {(activeProject.masterplanImage || activeProject.model) && (
               <button
                 onClick={toggleTopView}
-                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
               >
                 {topView ? "Perspective View" : "Top View"}
               </button>
@@ -1738,15 +1832,14 @@ export default function ZoyaShowcase() {
             {toolsEnabled && !drawMode && (activeProject.model || activeProject.masterplanImage) && (
               <button
                 onClick={startDrawing}
-                className="rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
               >
                 Draw Boundary
               </button>
             )}
-          </div>
-
-          <div className="absolute right-5 top-16 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
-            {activeProject.name} · Interactive Masterplan
+            <div className="shrink-0 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur sm:ml-auto">
+              {activeProject.name} · Interactive Masterplan
+            </div>
           </div>
 
           {/* Drawing toolbar — click the map to trace the real site outline, top-down
@@ -1962,20 +2055,6 @@ export default function ZoyaShowcase() {
         </>
       )}
 
-      {/* aerial gallery strip — Zoya-only real assets for now; no placeholders for other
-          projects (BEC), matching the video above. */}
-      {stage === "hero" && activeProjectId === ZOYA.id && (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 hidden -translate-x-1/2 gap-2 sm:flex">
-          {ZOYA_AERIAL_PHOTOS.map((p) => (
-            <ZoyaAsset
-              key={p.file}
-              src={`${ZOYA_AERIAL_DIR}/${p.file}`}
-              alt={p.caption}
-              className="h-14 w-20 rounded border border-white/10 object-cover"
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

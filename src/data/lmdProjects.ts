@@ -5,7 +5,8 @@
 export type LmdProjectStub = {
   id: string;
   name: string;
-  country: "Egypt" | "UAE" | "Spain" | "Greece";
+  /** Free text — LMD's own roster uses Egypt/UAE/Spain/Greece, other clients anything. */
+  country: string;
   /** Only set for projects with a real, calibrated interactive experience in this app. */
   href?: string;
   /** [lng, lat] of a real, sourced location — omitted rather than guessed where unconfirmed. */

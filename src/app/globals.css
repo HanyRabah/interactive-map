@@ -25,6 +25,34 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Touch-target safety net: screen size doesn't tell you input method (a laptop can have a
+   touchscreen; an iPad can have a mouse), so this keys off the actual pointer, not a
+   viewport breakpoint. The showcase's pill buttons were sized for a mouse cursor (~30px
+   tall) — comfortable to click, genuinely hard to hit reliably with a fingertip. Every
+   `<button>` gets Apple/Google's ~44px touch-target floor on a coarse pointer, without
+   touching the dozens of individual className strings that size them; visual padding is
+   untouched; the flex centering just keeps label text centered inside the taller box. */
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Horizontally-scrollable strips (masterplan header on mobile) — the native scrollbar reads
+   as "a list", not "a row of buttons"; the horizontal scroll affordance itself is obvious
+   from the content spilling off-screen, without needing the bar drawn too. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Ambient starfield (see SKY_STARS in ZoyaShowcase.tsx). Each star's final position never
    moves — `.lmd-star-host` is a zero-size anchor, `.lmd-star-dot` sits there from the start,
    and only `.lmd-star-tail` animates: it shrinks toward the dot (scaleX 1 -> 0) while fading,
@@ -119,6 +147,17 @@ body {
   opacity: 1;
   transition: opacity 0.5s ease;
 }
+/* Egypt alone clusters 5 project pins within a few pixels of each other at globe-scale —
+   28px is fine to aim a mouse cursor at, but a genuinely hard target to hit with a
+   fingertip without also brushing a neighboring pin. Same "expand the hit area, not the
+   dot" approach as the button rule above: `.lmd-pin-core`/`.lmd-pin-glow` keep their own
+   sizes, centered within the larger invisible box. */
+@media (pointer: coarse) {
+  .lmd-pin {
+    width: 44px;
+    height: 44px;
+  }
+}
 .lmd-pin-hidden {
   opacity: 0;
   pointer-events: none;
@@ -166,6 +205,16 @@ body {
 .lmd-pin:hover .lmd-pin-label {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+/* :hover never fires on touch, so without this a tap on a pin in that same Egypt cluster
+   commits to a project blind — no name preview before the finger lifts. :active is the
+   closest touch equivalent to hover's "I'm pointing at this" signal: it shows the label the
+   instant a finger lands, before the click/select actually commits on release. */
+@media (pointer: coarse) {
+  .lmd-pin:active .lmd-pin-label {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 /* Selected state reads via color, not a size change — animating `transform` here would
    fight the pulse keyframe above. Teal matches Zoya's own campaign accent. */

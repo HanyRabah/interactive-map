@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import "../globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,6 +15,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Zoya, Ghazala Bay — DP Interactive",
   description: "An interactive showcase of Zoya at Ghazala Bay, by DP Productions",
+};
+
+// viewportFit: "cover" lets the full-bleed map/video draw under the notch/home-indicator on
+// notched phones instead of being letterboxed by the browser — required for the
+// env(safe-area-inset-*) padding in ZoyaShowcase.tsx's bottom-anchored bars to mean anything;
+// without it those env() values just resolve to 0.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
