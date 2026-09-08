@@ -100,11 +100,8 @@ body {
   animation: lmd-star-tail 900ms ease-out both;
 }
 
-/* LMD portfolio pins: a soft pulsing glow orb. Amber is the default (night, Black Marble
-   city-lights) — kept because it's the original approved look and still reads fine against
-   dark ocean/land. It blends in badly against the day satellite basemap's tan/yellow desert
-   terrain though, so `.lmd-day` (toggled on the root element from `introNight`, see
-   ZoyaShowcase) swaps it for hot pink there instead, a hue the day imagery never produces.
+/* LMD portfolio pins: a soft pulsing glow orb, amber against the night Black Marble
+   city-lights (the intro globe's only look now — the day/night switcher was removed).
    The project name only appears as a tooltip on hover, above the pin. Four DOM
    levels on purpose: `host` is Mapbox's own positioned element (untouched); `.lmd-pin-pop-wrap`
    carries the one-shot entrance keyframe (transform+opacity); `.lmd-pin` carries the dissolve
@@ -169,9 +166,6 @@ body {
   background: radial-gradient(circle, rgba(245, 166, 35, 0.9) 0%, rgba(245, 166, 35, 0.35) 45%, transparent 75%);
   animation: lmd-pin-pulse 2.4s ease-in-out infinite;
   pointer-events: none;
-}
-.lmd-day .lmd-pin-glow {
-  background: radial-gradient(circle, rgba(255, 45, 120, 0.9) 0%, rgba(255, 45, 120, 0.35) 45%, transparent 75%);
 }
 .lmd-pin-core {
   position: relative;

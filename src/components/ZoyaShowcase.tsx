@@ -485,9 +485,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // choreographed camera move. Only setState when the threshold is actually crossed.
   const [logoZoomHidden, setLogoZoomHidden] = useState(false);
   const logoZoomHiddenRef = useRef(false);
-  // Night (real NASA night-lights + stars) vs day (normal daylit satellite) for the
-  // split/focus scenes only — independent of the hero-stage sunElevation slider.
-  const [introNight, setIntroNight] = useState(true);
   const [focusPanelVisible, setFocusPanelVisible] = useState(false);
   const [focusPanelMounted, setFocusPanelMounted] = useState(false);
 
@@ -593,10 +590,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     const m = map.current;
     if (!m) return;
     spinning.current = false;
-    if (!introNight) {
-      run();
-      return;
-    }
     m.setFog(fogFor(1));
     if (m.getLayer(BLACK_MARBLE_LAYER_ID)) m.setPaintProperty(BLACK_MARBLE_LAYER_ID, "raster-opacity", 0);
     window.setTimeout(run, 1200);
@@ -851,18 +844,12 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     // the persistent logo panel and the focus panel below), so there's no side column to
     // clear space for — the globe stays centered instead of pushed toward one edge.
     const sidePadding = w < 640 ? 0 : w * SPLIT_PADDING_FRACTION;
-    // These stages have no time-of-day of their own — night gets the fixed starry intro
-    // preset (independent of whatever the hero day/night slider last left behind — e.g.
-    // returning here from "comingsoon" should restore real space, not a daylit sky); day
-    // is a plain toggle to the normal satellite imagery, no stars.
+    // The intro scenes always wear the fixed starry night preset (real NASA night-lights),
+    // restored on every re-entry — e.g. returning here from "comingsoon" brings back real
+    // space, not the daylit sky the journey faded to.
     if (stage === "split" || stage === "focus") {
-      if (introNight) {
-        m.setFog(introFog());
-        if (m.getLayer(BLACK_MARBLE_LAYER_ID)) m.setPaintProperty(BLACK_MARBLE_LAYER_ID, "raster-opacity", 1);
-      } else {
-        m.setFog(fogFor(1));
-        if (m.getLayer(BLACK_MARBLE_LAYER_ID)) m.setPaintProperty(BLACK_MARBLE_LAYER_ID, "raster-opacity", 0);
-      }
+      m.setFog(introFog());
+      if (m.getLayer(BLACK_MARBLE_LAYER_ID)) m.setPaintProperty(BLACK_MARBLE_LAYER_ID, "raster-opacity", 1);
     }
     if (stage === "split") {
       m.easeTo({
@@ -892,7 +879,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       m.once("moveend", () => setFocusPanelVisible(true));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- createPins reads refs fresh, not a reactive dep
-  }, [stage, loaded, selectedPinId, introNight]);
+  }, [stage, loaded, selectedPinId]);
 
   // Focus-panel exit: entrance is handled above, in the choreography effect's "focus" branch
   // (tied to the actual camera moveend, not a fixed timer). This only handles leaving —
@@ -945,7 +932,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     // The hero/masterplan ground is always the real satellite photo — see
     // transitionToDayThenRun above for why there's no night version of it. sunElevation
     // (still used for the masterplan's own lighting and the fog/atmosphere) is fixed to a
-    // daylit value here rather than carried from introNight, to match.
+    // daylit value to match.
     setSunElevation(85);
     const project = activeProjectRef.current;
     const { hero } = viewsFor(project.id);
@@ -1406,7 +1393,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
 
   return (
     <div
-      className={`relative h-screen w-screen overflow-hidden bg-[#070f0d] font-sans text-[#f5f3ee] ${introNight ? "" : "lmd-day"}`}
+      className="relative h-screen w-screen overflow-hidden bg-[#070f0d] font-sans text-[#f5f3ee]"
     >
       {/* mapbox-gl.css sets .mapboxgl-map { position: relative } on whatever element becomes
           the container — that collides with an "absolute" class at equal specificity and can
@@ -1417,10 +1404,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
 
       {/* Ambient starfield — always mounted (never unmounts, so each star's comet-tail
           keyframe only ever plays once), just faded in/out by stage via this wrapper's own
-          opacity. NOT tied to introNight: the stars are the surrounding space, not the
-          globe's lighting — the day/night switcher only relights the globe itself, so the
-          backdrop stays put either way (this is also why it's called "introNight", not
-          "spaceVisible"). Each star holds its final position the whole time; only its tail
+          opacity. Each star holds its final position the whole time; only its tail
           animates, shrinking into the dot to read as "arriving fast, then settling." */}
       <div
         className={`pointer-events-none absolute inset-0 z-10 overflow-hidden transition-opacity duration-700 ${
@@ -1443,31 +1427,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           </div>
         ))}
       </div>
-
-      {/* Night/day switcher for the split/focus scenes only — Start the Journey fades the
-          globe itself back to day first if it was night (see transitionToDayThenRun), since
-          hero/masterplan only ever show the real day satellite photo; no separate control
-          once a journey actually starts. */}
-      {(stage === "split" || stage === "focus") && (
-        <div className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-20 hidden items-center gap-1 rounded-full border border-white/10 bg-[#0a1614]/90 p-1 backdrop-blur sm:flex">
-          <button
-            onClick={() => setIntroNight(true)}
-            className={`rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
-              introNight ? "bg-white text-[#070f0d]" : "text-[#8fa69e] hover:text-[#f5f3ee]"
-            }`}
-          >
-            Night
-          </button>
-          <button
-            onClick={() => setIntroNight(false)}
-            className={`rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
-              !introNight ? "bg-white text-[#070f0d]" : "text-[#8fa69e] hover:text-[#f5f3ee]"
-            }`}
-          >
-            Day
-          </button>
-        </div>
-      )}
 
       {!MAPBOX_TOKEN && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#070f0d] p-8 text-center">
