@@ -53,7 +53,7 @@ import { PROJECTS } from "./GlobePortfolioMap";
 import { ZOYA_HERO_VIDEO } from "@/data/zoyaMedia";
 import { LMD_PROJECTS, type LmdProjectStub } from "@/data/lmdProjects";
 
-const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")!;
+const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")! as { lng: number; lat: number } & (typeof PROJECTS)[number];
 
 // Zoya's own campaign color (LMD's real embroidered "ZOYA" wordmark, lmd.com.eg/en) — not
 // an invented accent. LMD's own brand mark is plain black/white; this teal is Zoya-specific.
@@ -94,7 +94,13 @@ const HERO_ZOOM_BY_PRECISION: Record<NonNullable<LmdProjectStub["precision"]>, n
 // A PROJECTS entry (GlobePortfolioMap.tsx's real data) that made it this far always has a
 // real, calibrated model/masterplanImage — that's what routes it through the flight/
 // masterplan flow below instead of the honest "comingsoon" placeholder.
-type ShowcaseProject = (typeof PROJECTS)[number];
+// Journey stages need real coordinates to fly to — the catalog's coordinate-less
+// coming-soon stubs are filtered out at hydration (they exist only in rosters/dropdowns).
+type ShowcaseProject = (typeof PROJECTS)[number] & { lng: number; lat: number };
+
+function withCoords(list: (typeof PROJECTS)[number][]): ShowcaseProject[] {
+  return list.filter((p): p is ShowcaseProject => p.lng != null && p.lat != null);
+}
 
 // Every hand-tuned pitch/zoom above was verified against a wide desktop viewport. A pitched
 // camera keeps the target lng/lat anchored to screen-center regardless of aspect ratio, but
@@ -288,8 +294,8 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // (fly-in, hero, 3D masterplan) without a deploy: the CMS's asset URLs and calibration
   // supersede the static ones. catalogRef mirrors it for event handlers (same pattern as
   // stageRef). On fetch failure the static array simply stays — the map never blanks.
-  const [catalogProjects, setCatalogProjects] = useState<ShowcaseProject[]>(PROJECTS);
-  const catalogRef = useRef<ShowcaseProject[]>(PROJECTS);
+  const [catalogProjects, setCatalogProjects] = useState<ShowcaseProject[]>(() => withCoords(PROJECTS));
+  const catalogRef = useRef<ShowcaseProject[]>(withCoords(PROJECTS));
   useEffect(() => {
     catalogRef.current = catalogProjects;
   }, [catalogProjects]);
@@ -298,11 +304,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     (async () => {
       // Hydrate, THEN warm the HTTP cache for whichever asset URLs won — preloading the
       // static list first would double-download every model once the CMS URLs replace it.
-      let list: ShowcaseProject[] = PROJECTS;
+      let list: ShowcaseProject[] = withCoords(PROJECTS);
       try {
         const res = await fetch("/api/projects", { cache: "no-store" });
-        const data = (await res.json()) as { projects?: ShowcaseProject[] };
-        if (Array.isArray(data.projects) && data.projects.length > 0) list = data.projects;
+        const data = (await res.json()) as { projects?: (typeof PROJECTS)[number][] };
+        if (Array.isArray(data.projects) && data.projects.length > 0) list = withCoords(data.projects);
       } catch {
         // static fallback already in place
       }

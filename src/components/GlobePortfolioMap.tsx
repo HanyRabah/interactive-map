@@ -33,13 +33,19 @@ import { PROJECTS, type Project } from "@/data/projects";
 export { PROJECTS };
 export type { Project };
 
+// Every in-repo project carries coordinates; narrowing once here keeps all the map math
+// below free of per-use undefined checks (CMS projects CAN omit coords, but this admin
+// view reads only the in-repo array).
+type PinnedProject = Project & { lng: number; lat: number };
+const MAP_PROJECTS = PROJECTS as PinnedProject[];
 
-const COUNTRIES = Array.from(new Set(PROJECTS.map((p) => p.country))).map((country) => {
-  const sample = PROJECTS.find((p) => p.country === country)!;
+
+const COUNTRIES = Array.from(new Set(MAP_PROJECTS.map((p) => p.country))).map((country) => {
+  const sample = MAP_PROJECTS.find((p) => p.country === country)!;
   return {
     country,
     countryCode: sample.countryCode,
-    projects: PROJECTS.filter((p) => p.country === country),
+    projects: MAP_PROJECTS.filter((p) => p.country === country),
   };
 });
 
@@ -66,7 +72,7 @@ export default function GlobePortfolioMap() {
   const [projection, setProjection] = useState<"globe" | "mercator">("globe");
   const [loaded, setLoaded] = useState(false);
   const [webgl, setWebgl] = useState<"webgl2" | "webgl1" | "unsupported" | null>(null);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProject, setSelectedProject] = useState<PinnedProject | null>(null);
   const [compareIndex, setCompareIndex] = useState(0);
   const [compareOpen, setCompareOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -97,7 +103,7 @@ export default function GlobePortfolioMap() {
     setWebgl(detectWebgl());
   }, []);
 
-  function flyToProject(p: Project) {
+  function flyToProject(p: PinnedProject) {
     spinning.current = false;
     setSelectedProject(p);
     setCompareIndex(0);
@@ -123,7 +129,7 @@ export default function GlobePortfolioMap() {
     setModelFootprint(null);
   }
 
-  function enterMasterplan3D(p: Project) {
+  function enterMasterplan3D(p: PinnedProject) {
     const m = map.current;
     if (!m) return;
     setCompareOpen(false);
@@ -154,7 +160,7 @@ export default function GlobePortfolioMap() {
   // Independent of enterMasterplan3D on purpose — both 3D layers can be open together so
   // the (still-uncalibrated) lagoon model can be visually aligned against the already-tuned
   // masterplan, not just against bare satellite imagery.
-  function enterLagoon3D(p: Project) {
+  function enterLagoon3D(p: PinnedProject) {
     const m = map.current;
     if (!m || !p.lagoonModel) return;
     setCompareOpen(false);
@@ -191,7 +197,7 @@ export default function GlobePortfolioMap() {
     setImageMasterplanOpen(false);
   }
 
-  function enterImageMasterplan(p: Project) {
+  function enterImageMasterplan(p: PinnedProject) {
     const m = map.current;
     if (!m || !p.masterplanImage) return;
     removeMasterplanLayer();
@@ -212,13 +218,13 @@ export default function GlobePortfolioMap() {
     m.fitBounds([sw, ne], { padding: 60, duration: 1200 });
   }
 
-  function updateCalibImage(p: Project, next: ImageMasterplanParams) {
+  function updateCalibImage(p: PinnedProject, next: ImageMasterplanParams) {
     const m = map.current;
     setCalibImage(next);
     if (m && imageMasterplanId.current) updateImageMasterplanLayer(m, imageMasterplanId.current, p.lng, p.lat, next);
   }
 
-  function enterCompare(p: Project) {
+  function enterCompare(p: PinnedProject) {
     const m = map.current;
     if (!m) return;
     removeMasterplanLayer();
@@ -233,7 +239,7 @@ export default function GlobePortfolioMap() {
     }, 300);
   }
 
-  function exitCompare(p: Project) {
+  function exitCompare(p: PinnedProject) {
     const m = map.current;
     setCompareOpen(false);
     if (!m) return;
@@ -262,7 +268,7 @@ export default function GlobePortfolioMap() {
     src.setData({ type: "FeatureCollection", features });
   }
 
-  function startDrawing(p: Project) {
+  function startDrawing(p: PinnedProject) {
     const m = map.current;
     if (!m) return;
     removeMasterplanLayer();
@@ -300,7 +306,7 @@ export default function GlobePortfolioMap() {
     map.current?.touchZoomRotate.enableRotation();
   }
 
-  function computeBoundaryResult(p: Project, points: [number, number][]) {
+  function computeBoundaryResult(p: PinnedProject, points: [number, number][]) {
     const meterPts = points.map(([lng, lat]) => lngLatToMeters(lng, lat, p.lng, p.lat));
     const rect = minAreaRect(meterPts);
     // rect.center (the rotating-calipers rectangle's own center) anchors the fitted
@@ -308,7 +314,7 @@ export default function GlobePortfolioMap() {
     setBoundaryResult({ rect, centroidMeters: rect.center });
   }
 
-  function finishDrawing(p: Project) {
+  function finishDrawing(p: PinnedProject) {
     const pts = drawPointsRef.current;
     if (pts.length < 3) return;
     computeBoundaryResult(p, pts);
@@ -318,7 +324,7 @@ export default function GlobePortfolioMap() {
     map.current?.touchZoomRotate.enableRotation();
   }
 
-  function loadOfficialBoundary(p: Project) {
+  function loadOfficialBoundary(p: PinnedProject) {
     const m = map.current;
     if (!m || !p.boundaryPolygon) return;
     removeMasterplanLayer();
@@ -349,7 +355,7 @@ export default function GlobePortfolioMap() {
     renderBoundaryDraw([]);
   }
 
-  async function applyBoundaryToImage(p: Project) {
+  async function applyBoundaryToImage(p: PinnedProject) {
     if (!boundaryResult || !p.masterplanImage) return;
     const { rect, centroidMeters } = boundaryResult;
     // The drawn box's aspect ratio essentially never matches the real image's own — fitting
@@ -368,7 +374,7 @@ export default function GlobePortfolioMap() {
     window.setTimeout(() => updateCalibImage(p, next), imageMasterplanOpen ? 0 : 350);
   }
 
-  function applyBoundaryTo3D(p: Project) {
+  function applyBoundaryTo3D(p: PinnedProject) {
     if (!boundaryResult) return;
     const { rect, centroidMeters } = boundaryResult;
     const longSide = Math.max(rect.width, rect.height);
@@ -419,7 +425,7 @@ export default function GlobePortfolioMap() {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: PROJECTS.map((p) => ({
+          features: MAP_PROJECTS.map((p) => ({
             type: "Feature",
             geometry: { type: "Point", coordinates: [p.lng, p.lat] },
             properties: { id: p.id, name: p.name },
@@ -454,7 +460,7 @@ export default function GlobePortfolioMap() {
       m.on("click", "project-dot", (e) => {
         const f = e.features?.[0];
         const id = f?.properties?.id as string | undefined;
-        const project = PROJECTS.find((p) => p.id === id);
+        const project = MAP_PROJECTS.find((p) => p.id === id);
         if (!project) return;
         flyToProject(project);
       });
@@ -567,7 +573,7 @@ export default function GlobePortfolioMap() {
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-sm font-semibold">Projects</span>
             <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
-              {PROJECTS.length} active
+              {MAP_PROJECTS.length} active
             </span>
           </div>
 

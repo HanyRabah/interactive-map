@@ -52,8 +52,11 @@ export type Project = {
   clientSlug?: string;
   country: string;
   countryCode: string;
-  lng: number;
-  lat: number;
+  /** Optional: a project whose area isn't publicly confirmed lists without a pin. */
+  lng?: number;
+  lat?: number;
+  /** How trustworthy the coordinates are — drives fly-in zoom depth. */
+  precision?: "exact" | "district" | "city";
   /** Server-only inventory routing — see ProjectCrmConfig. Never exposed via /api/projects. */
   crm?: ProjectCrmConfig;
   timeline?: TimelineEntry[];

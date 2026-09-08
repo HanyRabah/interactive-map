@@ -24,8 +24,9 @@ type ProjectDoc = {
   client?: ClientRel;
   country: string;
   countryCode: string;
-  lng: number;
-  lat: number;
+  lng?: number | null;
+  lat?: number | null;
+  precision?: "exact" | "district" | "city" | null;
   model?: AssetDoc;
   modelCalibration?: { scale?: number | null; rotationDeg?: number | null; offsetE?: number | null; offsetN?: number | null; offsetUp?: number | null } | null;
   lagoonModel?: AssetDoc;
@@ -87,8 +88,9 @@ function toProject(doc: ProjectDoc): Project {
     clientSlug: clientSlugOf(doc),
     country: doc.country,
     countryCode: doc.countryCode,
-    lng: doc.lng,
-    lat: doc.lat,
+    lng: doc.lng ?? undefined,
+    lat: doc.lat ?? undefined,
+    precision: doc.precision ?? undefined,
     model: modelUrl ? { url: modelUrl } : undefined,
     modelCalibration: modelUrl
       ? {

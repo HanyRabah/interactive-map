@@ -104,9 +104,23 @@ export default buildConfig({
         {
           type: "row",
           fields: [
-            { name: "lng", type: "number", required: true },
-            { name: "lat", type: "number", required: true },
+            // Optional on purpose: LMD's real roster includes projects whose exact area
+            // isn't publicly confirmed yet (8ight, Layan) — they list in the dropdown as
+            // honest coming-soon entries but get no pin until coordinates exist.
+            { name: "lng", type: "number", admin: { description: "Leave empty if the location is unconfirmed — the project lists without a pin." } },
+            { name: "lat", type: "number" },
           ],
+        },
+        {
+          name: "precision",
+          type: "select",
+          defaultValue: "exact",
+          options: [
+            { label: "Exact site anchor", value: "exact" },
+            { label: "District / named area", value: "district" },
+            { label: "City-level only", value: "city" },
+          ],
+          admin: { description: "How precise the coordinates are — drives how far the camera commits when flying in." },
         },
 
         // 3D masterplan model + calibration (same fields the in-app Calibrate panel tunes).
