@@ -123,8 +123,21 @@ export async function addImageMasterplanLayer(
 ) {
   const url = await rasterizeIfSvg(imageUrl);
   const coordinates = computeImageCorners(lng, lat, params);
-  if (map.getLayer(id)) map.removeLayer(id);
-  if (map.getSource(id)) map.removeSource(id);
+
+  // Re-entry (the journey calls this once entering "hero" and again entering
+  // "masterplan") must UPDATE the existing source in place, not tear it down and
+  // re-add: removing an image source mid-frame trips a "reading 'get'" TypeError
+  // inside mapbox-gl 3.28's removeSource, which aborts after the layer is already
+  // deleted — leaving the source stranded and the masterplan invisible.
+  const existing = map.getSource(id) as mapboxgl.ImageSource | undefined;
+  if (existing) {
+    existing.updateImage({ url, coordinates });
+    if (!map.getLayer(id)) {
+      map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.95, "raster-fade-duration": 0 } });
+    }
+    return;
+  }
+
   map.addSource(id, { type: "image", url, coordinates });
   map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.95, "raster-fade-duration": 0 } });
 }
@@ -135,6 +148,12 @@ export function updateImageMasterplanLayer(map: mapboxgl.Map, id: string, lng: n
 }
 
 export function removeImageMasterplanLayer(map: mapboxgl.Map, id: string) {
-  if (map.getLayer(id)) map.removeLayer(id);
-  if (map.getSource(id)) map.removeSource(id);
+  // Same mapbox-gl 3.28 removeSource fragility as above — a failed teardown here must
+  // not crash the caller (backToOverview), it just means the hidden source lingers.
+  try {
+    if (map.getLayer(id)) map.removeLayer(id);
+    if (map.getSource(id)) map.removeSource(id);
+  } catch (err) {
+    console.warn("removeImageMasterplanLayer: teardown failed (mapbox removeSource quirk)", err);
+  }
 }

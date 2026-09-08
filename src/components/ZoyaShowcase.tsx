@@ -282,12 +282,48 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // Which image-masterplan layer ids already have their click-to-zoom handler bound — see
   // enter2DMasterplan's comment on why this guards against duplicate registrations.
   const boundImageClickLayers = useRef(new Set<string>());
+  // The live project catalog. Starts as the in-repo PROJECTS array (instant, no loading
+  // state), then /api/projects — the CMS-merged view — replaces it once fetched. That's
+  // what makes a project added or edited in /admin light up the real journey stages
+  // (fly-in, hero, 3D masterplan) without a deploy: the CMS's asset URLs and calibration
+  // supersede the static ones. catalogRef mirrors it for event handlers (same pattern as
+  // stageRef). On fetch failure the static array simply stays — the map never blanks.
+  const [catalogProjects, setCatalogProjects] = useState<ShowcaseProject[]>(PROJECTS);
+  const catalogRef = useRef<ShowcaseProject[]>(PROJECTS);
+  useEffect(() => {
+    catalogRef.current = catalogProjects;
+  }, [catalogProjects]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Hydrate, THEN warm the HTTP cache for whichever asset URLs won — preloading the
+      // static list first would double-download every model once the CMS URLs replace it.
+      let list: ShowcaseProject[] = PROJECTS;
+      try {
+        const res = await fetch("/api/projects", { cache: "no-store" });
+        const data = (await res.json()) as { projects?: ShowcaseProject[] };
+        if (Array.isArray(data.projects) && data.projects.length > 0) list = data.projects;
+      } catch {
+        // static fallback already in place
+      }
+      if (cancelled) return;
+      setCatalogProjects(list);
+      for (const p of list) {
+        if (p.model?.url) fetch(p.model.url).catch(() => {});
+        if (p.masterplanImage?.url) fetch(p.masterplanImage.url).catch(() => {});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Which real project (Zoya, BEC, ...) the flight/hero/masterplan stages are currently
   // showing. A ref for the imperative map calls (flyTo center/model url etc., read at call
   // time, not captured in a stale closure) plus a state mirror so render can react to it.
   const activeProjectRef = useRef<ShowcaseProject>(ZOYA);
   const [activeProjectId, setActiveProjectId] = useState(ZOYA.id);
-  const activeProject = PROJECTS.find((p) => p.id === activeProjectId) ?? ZOYA;
+  const activeProject = catalogProjects.find((p) => p.id === activeProjectId) ?? ZOYA;
   // "2d" when the active project has a real masterplan image (Zoya today) — the flat
   // branded graphic is the more legible default; "3d" for a project with only a model
   // (BEC today), so its real GLB is what "Explore Masterplan" actually shows.
@@ -342,16 +378,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Warm the browser's HTTP cache for every real project's masterplan assets as soon as the
-  // page loads — well before "Start the Journey" — so the GLTFLoader/image fetch later hits
-  // cache instead of the network. Just a plain fetch, not a parse/render: cheap, and safe to
-  // fire for every real project up front since there are only ever a couple of them.
-  useEffect(() => {
-    for (const p of PROJECTS) {
-      if (p.model?.url) fetch(p.model.url).catch(() => {});
-      if (p.masterplanImage?.url) fetch(p.masterplanImage.url).catch(() => {});
-    }
-  }, []);
   // Perspective (the hand-tuned/generic masterplan angle) vs a flat top-down view — applies
   // to whichever of 2D/3D is currently showing.
   const [topView, setTopView] = useState(false);
@@ -584,7 +610,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     // Any real project — one with an actual calibrated model/masterplanImage in PROJECTS,
     // not just an LMD_PROJECTS stub — gets the real flight/hero/masterplan flow. Zoya no
     // longer needs a special case here: it has a model like any other real project now.
-    const real = selectedPinId === "zoya" ? ZOYA : PROJECTS.find((p) => p.id === selectedPinId);
+    const real =
+      catalogRef.current.find((p) => p.id === (selectedPinId === "zoya" ? "zoya-ghazala-bay" : selectedPinId)) ??
+      (selectedPinId === "zoya" ? ZOYA : undefined);
     if (real?.model || real?.masterplanImage) {
       activeProjectRef.current = real;
       setActiveProjectId(real.id);
@@ -1310,7 +1338,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   function goToProject(id: string) {
     setSwitcherOpen(false);
     if (map.current) removeGoogleImageryLayer(map.current);
-    const real = id === "zoya" ? ZOYA : PROJECTS.find((p) => p.id === id);
+    const real = catalogRef.current.find((p) => p.id === (id === "zoya" ? "zoya-ghazala-bay" : id));
     if (real && real.id === activeProjectId && stage === "masterplan") {
       backToOverview();
       return;
