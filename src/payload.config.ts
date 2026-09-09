@@ -4,7 +4,6 @@ import { buildConfig } from "payload";
 import { vercelPostgresAdapter } from "@payloadcms/db-vercel-postgres";
 import { vercelBlobStorage } from "@payloadcms/storage-vercel-blob";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
-import sharp from "sharp";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,7 +33,11 @@ export default buildConfig({
     pool: { connectionString: process.env.POSTGRES_URL },
   }),
   editor: lexicalEditor(),
-  sharp,
+  // No `sharp`: it only powers image resizing/thumbnails, and the assets collection
+  // deliberately has no imageSizes — the map consumes originals. Handing it to Payload
+  // pulled a native libvips binary into every server render, which failed to load on
+  // Vercel's linux-x64 runtime (npm resolves sharp's platform packages from the host that
+  // wrote the lockfile) and 500'd the whole site.
   telemetry: false,
   graphQL: { disable: true },
   typescript: {
