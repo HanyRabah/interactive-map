@@ -374,7 +374,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const [selectedPoi, setSelectedPoi] = useState<string | null>(null);
   const [poiRoutes, setPoiRoutes] = useState<Record<string, PoiRoute>>({});
   const [poiLoading, setPoiLoading] = useState<string | null>(null);
-  const poiMarkers = useRef<mapboxgl.Marker[]>([]);
+  const poiOverlay = useRef<HTMLDivElement>(null);
   // Mirrors for the marker click handlers, which are vanilla listeners bound once per
   // marker and would otherwise close over these values as they were at mount (same reason
   // selectPin reads selectedPinIdRef rather than selectedPinId).
@@ -1208,26 +1208,97 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     });
   }
 
-  // POI markers live only while the site overview is on screen. Mounting and unmounting them
+  // POI pills live only while the site overview is on screen. Mounting and unmounting them
   // from one effect keyed on the stage means every exit — Explore Masterplan, the globe
   // button, switching project — tears them down (and the drawn route with them) without each
   // of those paths having to remember to.
   useEffect(() => {
     const m = map.current;
-    if (!m || !loaded || stage !== "hero") return;
+    const overlay = poiOverlay.current;
+    if (!m || !overlay || !loaded || stage !== "hero") return;
     const project = catalogRef.current.find((p) => p.id === activeProjectId);
     const pois = project?.pointsOfInterest ?? [];
-    for (const poi of pois) {
-      const el = document.createElement("div");
-      el.className = "lmd-poi-marker";
-      el.title = poi.name;
-      el.innerHTML = `${poiIconSvg(poi.category, 15)}<span>${poi.name}</span>`;
+    if (pois.length === 0) return;
+
+    const pills = pois.map((poi) => {
+      const el = document.createElement("button");
+      el.className = "lmd-poi-pill";
+      el.dataset.poi = poi.name;
+      el.innerHTML =
+        `${poiIconSvg(poi.category, 14)}<span class="lmd-poi-name">${poi.name}</span>` +
+        `<span class="lmd-poi-chevron">&#9656;</span>`;
       el.addEventListener("click", () => selectPoi(poi.name));
-      poiMarkers.current.push(new mapboxgl.Marker({ element: el, anchor: "left" }).setLngLat([poi.lng, poi.lat]).addTo(m));
+      overlay.appendChild(el);
+      return { poi, el };
+    });
+
+    // Keep the pill fully inside the frame when it's clamped — half its height, plus room
+    // for the top-right controls it would otherwise slide under.
+    const MARGIN_X = 90;
+    const MARGIN_TOP = 70;
+    // Clears the "Explore Masterplan" button, which sits centred at the bottom.
+    const MARGIN_BOTTOM = 115;
+
+    function position() {
+      const map_ = map.current;
+      const box = poiOverlay.current;
+      if (!map_ || !box) return;
+      const w = box.clientWidth;
+      const h = box.clientHeight;
+      const cx = w / 2;
+      const cy = h / 2;
+      const placed: { el: HTMLElement; x: number; y: number; inside: boolean }[] = [];
+      for (const { poi, el } of pills) {
+        const p = map_.project([poi.lng, poi.lat]);
+        const inside =
+          p.x >= MARGIN_X && p.x <= w - MARGIN_X && p.y >= MARGIN_TOP && p.y <= h - MARGIN_BOTTOM;
+        let x = p.x;
+        let y = p.y;
+        if (!inside) {
+          // Slide along the ray from the centre of the frame out to the POI until it meets
+          // the inset rectangle — so the pill sits on the edge the POI actually lies beyond.
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          const sx = dx === 0 ? Infinity : (cx - MARGIN_X) / Math.abs(dx);
+          const sy = dy === 0 ? Infinity : (cy - (dy < 0 ? MARGIN_TOP : MARGIN_BOTTOM)) / Math.abs(dy);
+          const scale = Math.min(sx, sy);
+          x = cx + dx * scale;
+          y = cy + dy * scale;
+          el.style.setProperty("--poi-chevron", `${(Math.atan2(dy, dx) * 180) / Math.PI}deg`);
+        }
+        el.classList.toggle("lmd-poi-pill-edge", !inside);
+        el.classList.toggle("lmd-poi-pill-active", selectedPoiRef.current === poi.name);
+        placed.push({ el, x, y, inside });
+      }
+
+      // Several POIs in the same direction clamp to nearly the same point on the edge and
+      // land on top of each other (Zoya's airport and New Alamein are both south-east).
+      // Stack any that collide upward, in the order they're listed.
+      const boxes: { left: number; right: number; top: number; bottom: number }[] = [];
+      for (const item of placed) {
+        const pw = item.el.offsetWidth;
+        const ph = item.el.offsetHeight;
+        let y = item.y;
+        for (let guard = 0; guard < placed.length; guard++) {
+          const box = { left: item.x - pw / 2, right: item.x + pw / 2, top: y - ph / 2, bottom: y + ph / 2 };
+          const hit = boxes.find(
+            (b) => box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top
+          );
+          if (!hit) break;
+          y = hit.top - ph / 2 - 6;
+        }
+        boxes.push({ left: item.x - pw / 2, right: item.x + pw / 2, top: y - ph / 2, bottom: y + ph / 2 });
+        item.el.style.transform = `translate(-50%, -50%) translate(${Math.round(item.x)}px, ${Math.round(y)}px)`;
+      }
     }
+
+    position();
+    m.on("move", position);
+    m.on("resize", position);
     return () => {
-      poiMarkers.current.forEach((marker) => marker.remove());
-      poiMarkers.current = [];
+      m.off("move", position);
+      m.off("resize", position);
+      for (const { el } of pills) el.remove();
       removePoiRoute(m);
     };
   }, [stage, loaded, activeProjectId]);
@@ -1625,6 +1696,12 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       <div className="absolute inset-0">
         <div ref={mapContainer} className="h-full w-full" />
       </div>
+
+      {/* POI overlay. These pills are positioned by hand each frame rather than mounted as
+          mapboxgl.Markers because a marker that leaves the viewport simply disappears, and
+          every POI here is 17-35km out — off-screen at the framing that actually shows the
+          project. Clamped to the edge instead, with a chevron pointing the way. */}
+      <div ref={poiOverlay} className="pointer-events-none absolute inset-0 z-[5]" />
 
       {/* Ambient starfield — always mounted (never unmounts, so each star's comet-tail
           keyframe only ever plays once), just faded in/out by stage via this wrapper's own

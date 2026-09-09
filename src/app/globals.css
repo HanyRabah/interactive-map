@@ -225,29 +225,48 @@ body {
   border-color: rgba(28, 147, 160, 0.5);
 }
 
-/* POI markers on the site overview. Tens of kilometres from the site, so they only come
-   into view once a route is framed — a bare dot would be unreadable at that distance, hence
-   the label riding alongside. Pointer-events stay on the pill itself so the map is still
-   draggable around it. */
-.lmd-poi-marker {
+/* POI pills on the site overview. Positioned by JS each frame (see ZoyaShowcase) rather
+   than by mapboxgl.Marker: every POI is tens of kilometres from the site, so at the framing
+   that actually shows the project they are all off-screen. Out-of-frame pills clamp to the
+   edge and grow a chevron pointing toward the real location. */
+.lmd-poi-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px 5px 8px;
+  padding: 5px 10px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   background: rgba(10, 22, 20, 0.88);
   backdrop-filter: blur(6px);
-  color: #f5f3ee;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
+  color: #8fa69e;
+  font-family: ui-monospace, monospace;
+  font-size: 9.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
   transition: border-color 160ms ease, color 160ms ease;
 }
-.lmd-poi-marker:hover {
+.lmd-poi-pill:hover,
+.lmd-poi-pill-active {
   border-color: rgba(255, 255, 255, 0.5);
   color: #1c93a0;
+}
+.lmd-poi-name {
+  color: #f5f3ee;
+}
+/* The chevron only means something when the pill has been pushed to the edge — in frame,
+   the pill is sitting on the place itself and there is nothing to point at. */
+.lmd-poi-chevron {
+  display: none;
+  transform: rotate(var(--poi-chevron, 0deg));
+  font-size: 11px;
+  line-height: 1;
+}
+.lmd-poi-pill-edge .lmd-poi-chevron {
+  display: inline-block;
 }
