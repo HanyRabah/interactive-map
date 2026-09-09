@@ -1232,9 +1232,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       return { poi, el };
     });
 
-    // Keep the pill fully inside the frame when it's clamped — half its height, plus room
-    // for the top-right controls it would otherwise slide under.
-    const MARGIN_X = 90;
+    // Insets the clamped pill has to stay within. The horizontal one is per-pill: names run
+    // from "Marina" to "El Alamein International Airport", and a fixed inset narrower than
+    // half the pill's width pushes its leading edge off-screen.
     const MARGIN_TOP = 70;
     // Clears the "Explore Masterplan" button, which sits centred at the bottom.
     const MARGIN_BOTTOM = 115;
@@ -1250,8 +1250,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       const placed: { el: HTMLElement; x: number; y: number; inside: boolean }[] = [];
       for (const { poi, el } of pills) {
         const p = map_.project([poi.lng, poi.lat]);
+        const marginX = Math.min(el.offsetWidth / 2 + 12, w / 2 - 10);
         const inside =
-          p.x >= MARGIN_X && p.x <= w - MARGIN_X && p.y >= MARGIN_TOP && p.y <= h - MARGIN_BOTTOM;
+          p.x >= marginX && p.x <= w - marginX && p.y >= MARGIN_TOP && p.y <= h - MARGIN_BOTTOM;
         let x = p.x;
         let y = p.y;
         if (!inside) {
@@ -1259,7 +1260,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           // the inset rectangle — so the pill sits on the edge the POI actually lies beyond.
           const dx = p.x - cx;
           const dy = p.y - cy;
-          const sx = dx === 0 ? Infinity : (cx - MARGIN_X) / Math.abs(dx);
+          const sx = dx === 0 ? Infinity : (cx - marginX) / Math.abs(dx);
           const sy = dy === 0 ? Infinity : (cy - (dy < 0 ? MARGIN_TOP : MARGIN_BOTTOM)) / Math.abs(dy);
           const scale = Math.min(sx, sy);
           x = cx + dx * scale;
