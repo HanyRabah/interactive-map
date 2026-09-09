@@ -1,7 +1,8 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { buildConfig } from "payload";
-import { sqliteAdapter } from "@payloadcms/db-sqlite";
+import { vercelPostgresAdapter } from "@payloadcms/db-vercel-postgres";
+import { vercelBlobStorage } from "@payloadcms/storage-vercel-blob";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import sharp from "sharp";
 
@@ -10,8 +11,9 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 // Payload CMS — the admin surface for the project catalog. Two collections:
 //
 //   assets    every uploaded file (GLB models, masterplan graphics, videos, photos).
-//             Stored under public/uploads so Next serves them statically at /uploads/<name>
-//             with zero extra plumbing — the same URL shape the map already consumes.
+//             Stored in Vercel Blob (see the plugin below) and served straight from its
+//             CDN — the browser fetches GLBs and the masterplan graphic by URL, so they
+//             must not route through a serverless function.
 //
 //   projects  one document per development. Carries everything src/data/projects.ts
 //             hardcodes today (coordinates, calibration, asset references) PLUS the
@@ -25,8 +27,11 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 export default buildConfig({
   secret: process.env.PAYLOAD_SECRET || "dev-only-secret-change-me",
   routes: { api: "/payload-api" },
-  db: sqliteAdapter({
-    client: { url: process.env.DATABASE_URI || "file:./payload.db" },
+  // Neon Postgres. The pooled connection string is required on serverless: Payload opens a
+  // connection per request, and Vercel runs each concurrent request in its own instance, so
+  // the direct (non-pooling) endpoint exhausts Postgres connections under any real traffic.
+  db: vercelPostgresAdapter({
+    pool: { connectionString: process.env.POSTGRES_URL },
   }),
   editor: lexicalEditor(),
   sharp,
@@ -49,7 +54,8 @@ export default buildConfig({
     {
       slug: "assets",
       upload: {
-        staticDir: path.resolve(dirname, "../public/uploads"),
+        // No staticDir: the Vercel Blob plugin below owns storage. Vercel's filesystem is
+        // ephemeral, so anything written to disk at runtime vanishes on the next deploy.
         // No imageSizes: GLBs and videos aren't images, and the map consumes originals.
         mimeTypes: [
           "image/*",
@@ -231,5 +237,21 @@ export default buildConfig({
         },
       ],
     },
+  ],
+  plugins: [
+    // Uploads go to the public Blob store, so asset docs carry an absolute CDN URL and the
+    // map loads models/imagery directly. A private store would force every 28-84MB GLB
+    // through a serverless function on each request.
+    vercelBlobStorage({
+      enabled: true,
+      collections: {
+        // disablePayloadAccessControl makes asset.url the absolute Blob CDN URL. Without it
+        // Payload hands back /payload-api/assets/file/<name> and proxies every request
+        // through a serverless function — a 28MB GLB per visitor, per load. These files are
+        // public marketing assets, so there is no access control worth paying that for.
+        assets: { disablePayloadAccessControl: true },
+      },
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    }),
   ],
 });

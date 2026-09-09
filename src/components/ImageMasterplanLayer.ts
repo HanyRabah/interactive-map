@@ -139,7 +139,17 @@ export async function addImageMasterplanLayer(
   }
 
   map.addSource(id, { type: "image", url, coordinates });
-  map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.95, "raster-fade-duration": 0 } });
+  // Mounted invisible, then faded in once the image has actually loaded — it's added at
+  // flight start (see beginFlight), so a 4096² decode landing mid-flight eases in instead
+  // of popping onto the terrain the moment it's ready.
+  map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0, "raster-fade-duration": 0 } });
+  map.setPaintProperty(id, "raster-opacity-transition", { duration: 800, delay: 0 });
+  const reveal = (e: mapboxgl.MapSourceDataEvent) => {
+    if (e.sourceId !== id || !e.isSourceLoaded) return;
+    map.off("sourcedata", reveal);
+    if (map.getLayer(id)) map.setPaintProperty(id, "raster-opacity", 0.95);
+  };
+  map.on("sourcedata", reveal);
 }
 
 export function updateImageMasterplanLayer(map: mapboxgl.Map, id: string, lng: number, lat: number, params: ImageMasterplanParams) {

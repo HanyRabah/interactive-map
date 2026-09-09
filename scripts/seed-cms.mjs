@@ -79,6 +79,28 @@ async function uploadAsset(localPath, filename, mime, caption) {
   return data.doc;
 }
 
+// Zoya's live CRM connection. Sourced from SF_* env vars so a re-seed (or a fresh
+// environment) reproduces the Salesforce demo instead of needing a manual PATCH; falls back
+// to demo data when they're absent, so the seed still works with no Salesforce org at all.
+// This is the per-project multi-tenant path: the global CRM_PROVIDER stays "mock".
+function zoyaCrm() {
+  const { SF_INSTANCE_URL, SF_CLIENT_ID, SF_CLIENT_SECRET, SF_CURRENCY } = process.env;
+  if (!SF_INSTANCE_URL || !SF_CLIENT_ID || !SF_CLIENT_SECRET) {
+    console.log("SF_* env vars absent — seeding Zoya with demo inventory");
+    return { provider: "mock" };
+  }
+  return {
+    provider: "salesforce",
+    salesforce: {
+      instanceUrl: SF_INSTANCE_URL,
+      clientId: SF_CLIENT_ID,
+      clientSecret: SF_CLIENT_SECRET,
+      externalProjectId: "zoya",
+      currency: SF_CURRENCY || "EGP",
+    },
+  };
+}
+
 const CAL_ZOYA = { scale: 1, rotationDeg: 0, offsetE: -55, offsetN: 537, offsetUp: 0 };
 const CAL_ZOYA_LAGOON = { scale: 1, rotationDeg: 0, offsetE: 0, offsetN: 0, offsetUp: 0 };
 const CAL_BEC = { scale: 9.366, rotationDeg: -104, offsetE: -15, offsetN: 90, offsetUp: 0 };
@@ -118,6 +140,7 @@ async function main() {
     masterplanImage: mpAsset.id,
     masterplanParams: { widthMeters: 1826, heightMeters: 1826, rotationDeg: -0.3, offsetE: -88, offsetN: -498 },
     boundaryPolygon: ZOYA_BOUNDARY,
+    crm: zoyaCrm(),
   }));
   await upsert("projects", "slug", "bec", base("bec", "BEC", "Egypt", "EG", {
     lng: 34.757373, lat: 28.067182, precision: "exact",

@@ -32,7 +32,7 @@ export type ClusterSummary = {
 
 export type Lead = {
   contactName: string;
-  email: string;
+  email?: string;
   phone?: string;
   /** The unit the buyer clicked "enquire" from, if any. */
   unitId?: string;

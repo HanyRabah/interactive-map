@@ -210,6 +210,12 @@ body {
     transform: translate(-50%, 0);
   }
 }
+/* Each pin is its own absolutely-positioned .mapboxgl-marker; a later sibling paints over
+   an earlier one's label (the tight Egypt cluster). Lift whichever is hovered/selected. */
+.mapboxgl-marker:has(.lmd-pin:hover),
+.mapboxgl-marker:has(.lmd-pin-selected) {
+  z-index: 1;
+}
 /* Selected state reads via color, not a size change — animating `transform` here would
    fight the pulse keyframe above. Teal matches Zoya's own campaign accent. */
 .lmd-pin-selected .lmd-pin-glow {

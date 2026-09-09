@@ -112,7 +112,7 @@ export class MockProvider implements InventoryProvider {
   async createLead(lead: Lead): Promise<{ id: string }> {
     // Not persisted — just a stable-shaped id so downstream code (email confirmations,
     // rep notifications) can be wired without the CRM actually being connected yet.
-    const id = `LEAD-${lead.email.replace(/[^a-z0-9]/gi, "").slice(0, 12).toUpperCase()}-${Date.now().toString(36)}`;
+    const id = `LEAD-${(lead.email || lead.contactName).replace(/[^a-z0-9]/gi, "").slice(0, 12).toUpperCase()}-${Date.now().toString(36)}`;
     return { id };
   }
 

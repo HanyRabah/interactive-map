@@ -11,14 +11,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as (Partial<Lead> & { projectId?: string }) | null;
   if (!body) return Response.json({ error: "invalid JSON body" }, { status: 400 });
 
-  const { contactName, email } = body;
-  if (!contactName || !email) {
-    return Response.json({ error: "contactName and email are required" }, { status: 400 });
+  const { contactName } = body;
+  if (!contactName) {
+    return Response.json({ error: "contactName is required" }, { status: 400 });
   }
 
   const lead: Lead = {
     contactName,
-    email,
+    email: body.email,
     phone: body.phone,
     unitId: body.unitId,
     message: body.message,

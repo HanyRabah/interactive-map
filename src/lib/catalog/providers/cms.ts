@@ -10,10 +10,9 @@ import type { CatalogClient, CatalogProvider } from "../provider";
 //
 // CRM credentials entered in the admin panel ride along on the Project as `crm`, which is
 // SERVER-ONLY routing config for src/lib/crm — the public /api/projects routes must (and
-// do) strip it before responding. Asset URLs are /uploads/<filename> — Payload's staticDir
-// sits inside public/, so Next serves the files directly.
+// do) strip it before responding. Asset URLs come straight from Vercel Blob's CDN.
 
-type AssetDoc = { filename?: string | null } | number | null | undefined;
+type AssetDoc = { url?: string | null; filename?: string | null } | number | null | undefined;
 
 type ClientRel = { slug?: string | null } | number | null | undefined;
 
@@ -46,8 +45,13 @@ type ProjectDoc = {
   } | null;
 };
 
+// Payload hands back an absolute Blob CDN URL on `url` once the storage plugin is active.
+// The /uploads/<filename> fallback covers a local-disk setup (no BLOB_READ_WRITE_TOKEN).
 function assetUrl(asset: AssetDoc): string | undefined {
-  if (asset && typeof asset === "object" && asset.filename) return `/uploads/${asset.filename}`;
+  if (asset && typeof asset === "object") {
+    if (asset.url) return asset.url;
+    if (asset.filename) return `/uploads/${asset.filename}`;
+  }
   return undefined;
 }
 

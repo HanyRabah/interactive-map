@@ -52,6 +52,7 @@ import { createAtmosphereLayer, type AtmosphereLayer } from "./AtmosphereLayer";
 import { PROJECTS } from "./GlobePortfolioMap";
 import { ZOYA_HERO_VIDEO } from "@/data/zoyaMedia";
 import { LMD_PROJECTS, type LmdProjectStub } from "@/data/lmdProjects";
+import type { ClusterSummary } from "@/lib/crm/types";
 
 const ZOYA = PROJECTS.find((p) => p.id === "zoya-ghazala-bay")! as { lng: number; lat: number } & (typeof PROJECTS)[number];
 
@@ -156,14 +157,26 @@ const SPLIT_PADDING_FRACTION = 0.32;
 // Ambient starfield: each star sits at a fixed final position and never itself moves — only
 // its `.lmd-star-tail` animates, shrinking away like a comet settling into a point. Faster
 // (900ms + stagger) than the globe's own ~3.8s arrival, generated once at module load.
+// Seeded (mulberry32), not Math.random: this runs on the server AND again on the client,
+// and the inline styles below are part of the SSR'd HTML — two different random skies
+// meant every load logged a React hydration mismatch.
+const starRandom = (() => {
+  let a = 0x5eed1234;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+})();
 const SKY_STARS = Array.from({ length: 90 }, () => ({
-  x: Math.random() * 100,
-  y: Math.random() * 100,
-  size: 1 + Math.random() * 2,
-  opacity: 0.35 + Math.random() * 0.65,
-  angle: Math.random() * 360,
-  tailLen: 14 + Math.random() * 22,
-  delay: Math.random() * 400,
+  x: starRandom() * 100,
+  y: starRandom() * 100,
+  size: 1 + starRandom() * 2,
+  opacity: 0.35 + starRandom() * 0.65,
+  angle: starRandom() * 360,
+  tailLen: 14 + starRandom() * 22,
+  delay: starRandom() * 400,
 }));
 
 // Mirrors MasterplanLayer's render() transform exactly (holder R/S/T, then the fixed
@@ -329,6 +342,16 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // time, not captured in a stale closure) plus a state mirror so render can react to it.
   const activeProjectRef = useRef<ShowcaseProject>(ZOYA);
   const [activeProjectId, setActiveProjectId] = useState(ZOYA.id);
+  // Live cluster availability state — populated once `stage` exists below (see the effect
+  // right after its declaration; it needs `stage` in scope).
+  const [clusterAvailability, setClusterAvailability] = useState<ClusterSummary[] | null>(null);
+  // The "enquire" form — buyer name/phone/interested-cluster, posted to /api/leads, which
+  // routes to the active project's CRM (mock, or a client's real Salesforce, as a Lead).
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const [enquiryName, setEnquiryName] = useState("");
+  const [enquiryPhone, setEnquiryPhone] = useState("");
+  const [enquiryCluster, setEnquiryCluster] = useState("");
+  const [enquiryStatus, setEnquiryStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const activeProject = catalogProjects.find((p) => p.id === activeProjectId) ?? ZOYA;
   // "2d" when the active project has a real masterplan image (Zoya today) — the flat
   // branded graphic is the more legible default; "3d" for a project with only a model
@@ -459,6 +482,24 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
 
   const [stage, setStage] = useState<Stage>("logo");
   const stageRef = useRef<Stage>("logo");
+  // Live cluster availability — /api/units routes per-project to the CRM (mock, or a
+  // client's real Salesforce org — see src/lib/crm). Only fetched while the masterplan is
+  // actually open, so idle globe-browsing never hits the CRM.
+  useEffect(() => {
+    // Stale data from a previous project/visit is harmless: the panel below only renders
+    // while stage === "masterplan", so an outdated clusterAvailability never shows through.
+    if (stage !== "masterplan") return;
+    let cancelled = false;
+    fetch(`/api/units?projectId=${activeProjectId}&summary=1`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { clusters?: ClusterSummary[] }) => {
+        if (!cancelled && Array.isArray(data.clusters)) setClusterAvailability(data.clusters);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [stage, activeProjectId]);
   const [logoVisible, setLogoVisible] = useState(false);
   const advancingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
@@ -936,22 +977,30 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     setSunElevation(85);
     const project = activeProjectRef.current;
     const { hero } = viewsFor(project.id);
+    // Journey-only imagery source (see journeySource) — mounted BEFORE the night→day
+    // crossfade, not on arrival, so Google's tiles have the whole ~1.2s fade + ~4.2s flyTo
+    // to load in underneath the moving camera. Mounting it inside the crossfade's callback
+    // meant the fade revealed the intro globe's Esri imagery (turquoise water) first, and
+    // then Google's (deep blue) loaded over it during the flight — two visibly different
+    // satellites in one journey. Esri comes off at the same moment for the same reason;
+    // goToProject puts it back when the journey ends. Never shown on the intro
+    // globe/split/focus stages. Falls back to Mapbox's own satellite tiles (already
+    // underneath) automatically if Google's tiles error.
+    if (journeySourceRef.current === "google" && !googleImageryFailedRef.current) {
+      removeEsriImageryLayer(map.current);
+      addGoogleImageryLayer(map.current, () => {
+        googleImageryFailedRef.current = true;
+        if (map.current && defaultImageryRef.current === "esri") addEsriImageryLayer(map.current);
+      });
+    }
+    // The branded masterplan graphic likewise mounts now (it fades itself in once loaded —
+    // see addImageMasterplanLayer) rather than on arrival, where it used to pop onto the
+    // terrain the instant the camera settled.
+    if (project.masterplanImage) enter2DMasterplan(project);
     transitionToDayThenRun(() => {
       if (!map.current) return;
       setStage("flight");
       atmosphereTarget.current = 0.6;
-      // Journey-only imagery source (see journeySource) — mounted right as the flight
-      // starts, not on arrival, so Google's tiles have the whole ~4.2s flyTo to load in
-      // underneath the moving camera. Loading it only after arrival (the original
-      // approach) meant visitors saw Mapbox's own satellite for the entire flight, then a
-      // visible pop to Google right as the camera settled — exactly the "reveal" this
-      // avoids. Never shown on the intro globe/split/focus stages. Falls back to Mapbox's
-      // own satellite tiles (already underneath) automatically if Google's tiles error.
-      if (journeySourceRef.current === "google" && !googleImageryFailedRef.current) {
-        addGoogleImageryLayer(map.current, () => {
-          googleImageryFailedRef.current = true;
-        });
-      }
       map.current.flyTo({
         center: [project.lng, project.lat],
         zoom: hero.zoom,
@@ -961,13 +1010,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
         duration: 4200,
         essential: true,
       });
-      window.setTimeout(() => {
-        setStage("hero");
-        // Show the real branded masterplan graphic draped in the scene right away, not
-        // hidden behind a separate "Explore Masterplan" click — clicking it (see
-        // enter2DMasterplan's click binding) zooms into the full masterplan stage.
-        if (project.masterplanImage) enter2DMasterplan(project);
-      }, 4300);
+      window.setTimeout(() => setStage("hero"), 4300);
     });
   }
 
@@ -1328,9 +1371,33 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     setStage("hero");
   }
 
+  async function submitEnquiry() {
+    if (!enquiryName.trim()) return;
+    setEnquiryStatus("sending");
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contactName: enquiryName.trim(),
+          phone: enquiryPhone.trim() || undefined,
+          message: enquiryCluster ? `Interested in: ${enquiryCluster}` : undefined,
+          projectId: activeProjectId,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setEnquiryStatus("sent");
+    } catch {
+      setEnquiryStatus("error");
+    }
+  }
+
   function goToProject(id: string) {
     setSwitcherOpen(false);
-    if (map.current) removeGoogleImageryLayer(map.current);
+    if (map.current) {
+      removeGoogleImageryLayer(map.current);
+      if (defaultImageryRef.current === "esri") addEsriImageryLayer(map.current);
+    }
     const real = catalogRef.current.find((p) => p.id === (id === "zoya" ? "zoya-ghazala-bay" : id));
     if (real && real.id === activeProjectId && stage === "masterplan") {
       backToOverview();
@@ -1834,6 +1901,116 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
               {activeProject.name} · Interactive Masterplan
             </div>
           </div>
+
+          {/* Live availability, straight from the CRM (mock or the client's real Salesforce
+              org) — the "I marked it sold and the map changed" moment. */}
+          {clusterAvailability && clusterAvailability.length > 0 && (
+            <div className="absolute right-5 top-32 z-10 flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-[#0a1614]/90 px-4 py-3 backdrop-blur">
+              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">Availability</span>
+              {clusterAvailability.map((c) => (
+                <div key={c.cluster} className="flex items-center justify-between gap-6 text-[11px] text-[#f5f3ee]">
+                  <span>{c.cluster}</span>
+                  <span className="font-mono text-[#8fa69e]">
+                    {c.available} / {c.total}
+                  </span>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  setEnquiryName("");
+                  setEnquiryPhone("");
+                  setEnquiryCluster(clusterAvailability[0]?.cluster ?? "");
+                  setEnquiryStatus("idle");
+                  setEnquiryOpen(true);
+                }}
+                className="mt-1 rounded-full px-3 py-1.5 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-[#070f0d] hover:opacity-90"
+                style={{ backgroundColor: ACCENT }}
+              >
+                Enquire
+              </button>
+            </div>
+          )}
+
+          {/* Enquiry form — buyer submits name/phone/interest, lands as a Lead in the
+              active project's CRM (mock, or a client's real Salesforce org). */}
+          {enquiryOpen && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#0a1614] p-6">
+                {enquiryStatus === "sent" ? (
+                  <>
+                    <p className="font-mono text-sm text-[#f5f3ee]">Thanks — a DP representative will be in touch.</p>
+                    <button
+                      onClick={() => setEnquiryOpen(false)}
+                      className="mt-4 w-full rounded-full border border-white/15 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] hover:border-white/40"
+                    >
+                      Close
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e]">
+                        Enquire · {activeProject.name}
+                      </span>
+                      <button
+                        onClick={() => setEnquiryOpen(false)}
+                        className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] hover:text-[#f5f3ee]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <input
+                        value={enquiryName}
+                        onChange={(e) => setEnquiryName(e.target.value)}
+                        placeholder="Full name"
+                        className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-[#f5f3ee] placeholder:text-[#8fa69e]/60 focus:border-white/40 focus:outline-none"
+                      />
+                      <input
+                        value={enquiryPhone}
+                        onChange={(e) => setEnquiryPhone(e.target.value)}
+                        placeholder="Phone number"
+                        className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-[#f5f3ee] placeholder:text-[#8fa69e]/60 focus:border-white/40 focus:outline-none"
+                      />
+                      {clusterAvailability && clusterAvailability.length > 0 ? (
+                        <select
+                          value={enquiryCluster}
+                          onChange={(e) => setEnquiryCluster(e.target.value)}
+                          className="rounded-lg border border-white/15 bg-[#0a1614] px-3 py-2 text-sm text-[#f5f3ee] focus:border-white/40 focus:outline-none"
+                        >
+                          {clusterAvailability.map((c) => (
+                            <option key={c.cluster} value={c.cluster}>
+                              {c.cluster}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          value={enquiryCluster}
+                          onChange={(e) => setEnquiryCluster(e.target.value)}
+                          placeholder="Interested in"
+                          className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-[#f5f3ee] placeholder:text-[#8fa69e]/60 focus:border-white/40 focus:outline-none"
+                        />
+                      )}
+                      {enquiryStatus === "error" && (
+                        <span className="font-mono text-[10px] text-red-400">
+                          Something went wrong — please try again.
+                        </span>
+                      )}
+                      <button
+                        onClick={submitEnquiry}
+                        disabled={!enquiryName.trim() || enquiryStatus === "sending"}
+                        className="rounded-full py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#070f0d] disabled:opacity-40"
+                        style={{ backgroundColor: ACCENT }}
+                      >
+                        {enquiryStatus === "sending" ? "Submitting…" : "Submit"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Drawing toolbar — click the map to trace the real site outline, top-down
               (see startDrawing) so it's easy to place points accurately. */}
