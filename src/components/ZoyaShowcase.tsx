@@ -528,6 +528,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const logoZoomHiddenRef = useRef(false);
   const [focusPanelVisible, setFocusPanelVisible] = useState(false);
   const [focusPanelMounted, setFocusPanelMounted] = useState(false);
+  // The pending "globe has arrived, show the panel" listener, so a second pin selection can
+  // detach the first one instead of stacking another (see the "focus" branch below).
+  const focusArrivalRef = useRef<(() => void) | null>(null);
 
   const selectedProject = selectedPinId === "zoya" ? { name: "Zoya", country: "Egypt" } : roster.find((p) => p.id === selectedPinId);
   const selectedLngLat: [number, number] | undefined =
@@ -908,16 +911,35 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     } else if (stage === "focus") {
       // Mirror of "split": globe moves to the LEFT (padding.right pulls it into the remaining
       // left portion) so the vacated right side can hold the project title/coords/button panel.
-      m.easeTo({
+      //
+      // flyTo, not easeTo: easeTo interpolates zoom and center independently, so switching
+      // from one project to another slid the globe sideways at a constant close-in zoom —
+      // the "jumping" between projects. flyTo follows the standard zoom-out-travel-zoom-in
+      // arc; `curve` is how much it pulls back at the apex (1.4 is a gentle lift, not a
+      // full retreat to the globe), and `speed` keeps the whole move about as quick as the
+      // easeTo it replaces.
+      m.flyTo({
         ...(selectedLngLat ? { center: selectedLngLat } : {}),
         zoom: 2.15,
         padding: { left: 0, right: sidePadding, top: 0, bottom: 0 },
-        duration: 1400,
+        curve: 1.4,
+        speed: 1.1,
+        essential: true,
       });
       // The panel (title + coords + button) only fades in once the globe has actually
       // arrived at the zoomed-in framing — showing it earlier, while the camera is still
       // mid-flight, read as arriving ahead of the motion instead of because of it.
-      m.once("moveend", () => setFocusPanelVisible(true));
+      //
+      // Selecting another pin while already in focus re-runs this branch (selectedPinId is a
+      // dep), so the previous listener has to come off first: `once` handlers stack, and a
+      // stale one firing at the end of the *new* flight re-showed the panel mid-transition.
+      if (focusArrivalRef.current) m.off("moveend", focusArrivalRef.current);
+      const onArrival = () => {
+        focusArrivalRef.current = null;
+        setFocusPanelVisible(true);
+      };
+      focusArrivalRef.current = onArrival;
+      m.once("moveend", onArrival);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- createPins reads refs fresh, not a reactive dep
   }, [stage, loaded, selectedPinId]);
@@ -1410,6 +1432,30 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       return;
     }
     if (stage === "logo") setStage("split");
+    // Already landed on a *different* project (hero/masterplan/flight): selectPin alone would
+    // only swap the highlighted pin and leave the camera parked on the old site, because it
+    // promotes the stage from "split" and nothing else. Pull back to the globe first, tearing
+    // down the previous project's site-specific layers, and select the new pin once that
+    // retreat has actually landed — so the move reads as zoom out, travel, zoom in.
+    if (stage === "hero" || stage === "masterplan" || stage === "flight") {
+      const m = map.current;
+      setSelectedBuilding(null);
+      removeImageMasterplan();
+      remove3DMasterplanLayer();
+      clearBoundary();
+      exitDrawMode();
+      setTopView(false);
+      atmosphereTarget.current = 0.6;
+      // The old project's title/coords card must not linger over the retreat.
+      setFocusPanelVisible(false);
+      setFocusPanelMounted(false);
+      setStage("split");
+      // selectPin reads stageRef, which the "split" choreography easeTo above will have
+      // settled by moveend — so this promotes straight into the focus flyTo.
+      if (m) m.once("moveend", () => selectPin(id));
+      else selectPin(id);
+      return;
+    }
     selectPin(id);
   }
 
