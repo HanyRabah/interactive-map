@@ -85,6 +85,58 @@ export default buildConfig({
       ],
     },
     {
+      // One document per PRODUCT (a villa/condo type), not per unit. Content only: the
+      // render, the size, the bedroom line, and the polygon it occupies on the masterplan.
+      // Inventory — which units exist, their numbers, their status — stays in the CRM, so
+      // marketing can edit a photo without Salesforce access and sales can mark a unit sold
+      // without a deploy.
+      //
+      // `code` is the join key: it must equal Villa_Type__c on that org's Unit__c records.
+      slug: "villaTypes",
+      labels: { singular: "Villa type", plural: "Villa types" },
+      admin: {
+        useAsTitle: "name",
+        group: "Catalog",
+        defaultColumns: ["name", "area", "areaSqm", "project"],
+        listSearchableFields: ["name", "code", "area"],
+      },
+      fields: [
+        { name: "project", type: "relationship", relationTo: "projects", required: true },
+        {
+          name: "code",
+          type: "text",
+          required: true,
+          unique: true,
+          admin: { description: "Join key — must match Villa_Type__c on this org's Unit__c records exactly, e.g. isle-vil-twin-palm-condo-180." },
+        },
+        {
+          name: "area",
+          type: "text",
+          required: true,
+          admin: { description: "The masterplan area this product sits in, e.g. Sea Vil. Must match Cluster__c in the CRM." },
+        },
+        // Deliberately NOT unique: LMD really does sell two different "Twin Palm Condo"
+        // products (180 and 235 sqm) and two "Town Casa". The size is what tells them apart
+        // on their own site, so the hover card shows name + size together and `code` carries
+        // the uniqueness.
+        { name: "name", type: "text", required: true, admin: { description: "As shown to buyers. Need not be unique — the size disambiguates." } },
+        {
+          type: "row",
+          fields: [
+            { name: "areaSqm", type: "number", required: true, admin: { description: "Total space in m²." } },
+            { name: "bedroomsText", type: "text", required: true, admin: { description: "Verbatim, e.g. 3 + Nanny's + Driver's Bedrooms." } },
+          ],
+        },
+        { name: "image", type: "upload", relationTo: "assets", admin: { description: "The render shown on the hover card." } },
+        { name: "description", type: "textarea" },
+        {
+          name: "polygon",
+          type: "json",
+          admin: { description: "JSON array of [lng, lat] pairs outlining this product's plots on the masterplan. Drawn in-app with ?tools=1 rather than typed." },
+        },
+      ],
+    },
+    {
       slug: "projects",
       admin: { useAsTitle: "name", group: "Catalog", defaultColumns: ["name", "client", "country", "published", "order"], listSearchableFields: ["name", "slug", "developer"] },
       hooks: {

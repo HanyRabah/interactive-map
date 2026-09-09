@@ -1,5 +1,6 @@
 import type { InventoryProvider } from "../provider";
-import type { ClusterSummary, Lead, Shortlist, Unit, UnitStatus } from "../types";
+import type { ClusterSummary, Lead, Shortlist, Unit, UnitStatus, VillaTypeSummary } from "../types";
+import { rollUpClusters, rollUpVillaTypes } from "../rollup";
 
 // Real Salesforce adapter, built for the showcase org (see docs/salesforce/setup.md for
 // the org-side setup: Unit__c custom object, Connected App with the Client Credentials
@@ -34,6 +35,7 @@ type SfUnitRecord = {
   Name: string;
   Project_Id__c: string;
   Cluster__c: string;
+  Villa_Type__c?: string | null;
   Status__c: string;
   Price__c: number | null;
   Bedrooms__c: number | null;
@@ -115,11 +117,38 @@ export class SalesforceProvider implements InventoryProvider {
     return data.records;
   }
 
+  // Villa_Type__c is the join key to the CMS's villa types, but it's a field WE asked the
+  // client to add — an org that hasn't added it yet must keep working, showing area-level
+  // availability without the per-product breakdown, rather than 500ing the whole map. So the
+  // field is queried optimistically and dropped on the org's own INVALID_FIELD complaint;
+  // the flag flips back the moment the field appears, with no redeploy.
+  private villaTypeFieldMissing = false;
+
+  private unitFields(): string {
+    const base = "Name, Project_Id__c, Cluster__c, Status__c, Price__c, Bedrooms__c, Area_Sqm__c";
+    return this.villaTypeFieldMissing ? base : `${base}, Villa_Type__c`;
+  }
+
+  private async queryUnits(where: string): Promise<SfUnitRecord[]> {
+    try {
+      return await this.query<SfUnitRecord>(`SELECT ${this.unitFields()} FROM Unit__c WHERE ${where}`);
+    } catch (err) {
+      if (this.villaTypeFieldMissing || !/No such column 'Villa_Type__c'/.test(String(err))) throw err;
+      console.warn(
+        "[salesforce] Unit__c has no Villa_Type__c field — falling back to area-level availability. " +
+          "Add the field and import the villa-type units to enable the per-villa hover cards."
+      );
+      this.villaTypeFieldMissing = true;
+      return this.query<SfUnitRecord>(`SELECT ${this.unitFields()} FROM Unit__c WHERE ${where}`);
+    }
+  }
+
   private mapUnit(r: SfUnitRecord): Unit {
     return {
       id: r.Name,
       projectId: r.Project_Id__c,
       cluster: r.Cluster__c,
+      villaType: r.Villa_Type__c ?? undefined,
       status: toStatus(r.Status__c),
       price: r.Price__c != null ? { amount: r.Price__c, currency: this.config.currency ?? "USD" } : undefined,
       bedrooms: r.Bedrooms__c ?? undefined,
@@ -129,33 +158,21 @@ export class SalesforceProvider implements InventoryProvider {
 
   async listUnits(projectId: string): Promise<Unit[]> {
     const externalId = this.config.externalProjectId?.(projectId) ?? projectId;
-    const records = await this.query<SfUnitRecord>(
-      `SELECT Name, Project_Id__c, Cluster__c, Status__c, Price__c, Bedrooms__c, Area_Sqm__c ` +
-      `FROM Unit__c WHERE Project_Id__c = '${soqlEscape(externalId)}' ORDER BY Name`
-    );
+    const records = await this.queryUnits(`Project_Id__c = '${soqlEscape(externalId)}' ORDER BY Name`);
     return records.map((r) => this.mapUnit(r));
   }
 
   async getUnit(unitId: string): Promise<Unit | null> {
-    const records = await this.query<SfUnitRecord>(
-      `SELECT Name, Project_Id__c, Cluster__c, Status__c, Price__c, Bedrooms__c, Area_Sqm__c ` +
-      `FROM Unit__c WHERE Name = '${soqlEscape(unitId)}' LIMIT 1`
-    );
+    const records = await this.queryUnits(`Name = '${soqlEscape(unitId)}' LIMIT 1`);
     return records.length ? this.mapUnit(records[0]) : null;
   }
 
   async listClusters(projectId: string): Promise<ClusterSummary[]> {
-    // A few hundred rows per project — aggregate in JS rather than juggling grouped SOQL
-    // with per-status counts. Revisit if a client's org holds thousands of units.
-    const units = await this.listUnits(projectId);
-    const byCluster = new Map<string, { total: number; available: number }>();
-    for (const u of units) {
-      const entry = byCluster.get(u.cluster) ?? { total: 0, available: 0 };
-      entry.total += 1;
-      if (u.status === "available") entry.available += 1;
-      byCluster.set(u.cluster, entry);
-    }
-    return Array.from(byCluster, ([cluster, v]) => ({ cluster, ...v }));
+    return rollUpClusters(await this.listUnits(projectId));
+  }
+
+  async listVillaTypes(projectId: string): Promise<VillaTypeSummary[]> {
+    return rollUpVillaTypes(await this.listUnits(projectId));
   }
 
   async createLead(lead: Lead): Promise<{ id: string }> {

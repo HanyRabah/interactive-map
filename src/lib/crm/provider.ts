@@ -1,4 +1,4 @@
-import type { ClusterSummary, Lead, Shortlist, Unit } from "./types";
+import type { ClusterSummary, Lead, Shortlist, Unit, VillaTypeSummary } from "./types";
 
 // The one contract every CRM/ERP adapter implements. The rest of the app imports the
 // provider singleton (see ./index.ts) and never touches Salesforce/SAP field names.
@@ -11,6 +11,8 @@ export interface InventoryProvider {
   getUnit(unitId: string): Promise<Unit | null>;
   /** Fast summary for masterplan cluster labels; adapters may aggregate server-side. */
   listClusters(projectId: string): Promise<ClusterSummary[]>;
+  /** Availability per product, keyed by the CMS villaTypes `code`, for the hover cards. */
+  listVillaTypes(projectId: string): Promise<VillaTypeSummary[]>;
 
   createLead(lead: Lead): Promise<{ id: string }>;
 

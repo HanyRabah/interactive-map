@@ -15,8 +15,14 @@ export type Money = {
 export type Unit = {
   id: string;
   projectId: string;
-  /** Display-name of the cluster/phase the unit belongs to ("Lagoon Residences"). */
+  /** Display-name of the area/phase the unit belongs to ("Sea Vil"). */
   cluster: string;
+  /**
+   * Which product this unit is — the join key into the CMS villaTypes collection, which
+   * carries the render, size and bedroom line. Absent on units whose org hasn't adopted the
+   * field, which is why every consumer treats it as optional rather than assuming it.
+   */
+  villaType?: string;
   status: UnitStatus;
   price?: Money;
   bedrooms?: number;
@@ -28,6 +34,16 @@ export type ClusterSummary = {
   cluster: string;
   total: number;
   available: number;
+};
+
+/** Availability rolled up per product, for the villa-type hover cards. */
+export type VillaTypeSummary = {
+  villaType: string;
+  cluster: string;
+  total: number;
+  available: number;
+  /** Unit numbers a buyer can actually enquire about, so the form can offer a real choice. */
+  availableUnitIds: string[];
 };
 
 export type Lead = {
