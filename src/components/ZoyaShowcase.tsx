@@ -1392,6 +1392,32 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     }
   }
 
+  // The one way back to the globe from anywhere in the journey. backToOverview() only pulls
+  // out to the *same* project's hero framing; this leaves the project entirely — tearing down
+  // its site-specific layers and restoring the night-globe intro look the split stage expects
+  // (fog + Black Marble are re-applied by the choreography effect, which keys off the stage).
+  function returnToGlobe() {
+    const m = map.current;
+    setSwitcherOpen(false);
+    if (m) {
+      removeGoogleImageryLayer(m);
+      if (defaultImageryRef.current === "esri") addEsriImageryLayer(m);
+    }
+    setSelectedBuilding(null);
+    removeImageMasterplan();
+    remove3DMasterplanLayer();
+    clearBoundary();
+    exitDrawMode();
+    setTopView(false);
+    atmosphereTarget.current = 0.6;
+    // The focus card and the pin highlight both belong to the project being left.
+    setFocusPanelVisible(false);
+    setFocusPanelMounted(false);
+    setSelectedPinId(null);
+    spinning.current = true;
+    setStage("split");
+  }
+
   function goToProject(id: string) {
     setSwitcherOpen(false);
     if (map.current) {
@@ -1658,13 +1684,33 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       {/* Project switcher — real LMD roster, grouped by country; only Zoya is a real
           interactive experience today, everything else says so honestly instead of faking it. */}
       {showSwitcherTrigger && (
-        <div className="absolute right-5 top-5 z-20">
-          <button
-            onClick={() => setSwitcherOpen((v) => !v)}
-            className="rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40"
-          >
-            {brand.name} Projects {switcherOpen ? "▴" : "▾"}
-          </button>
+        <div className="absolute right-5 top-5 z-20 flex flex-col items-end">
+          <div className="flex items-center gap-2">
+            {/* Back to the globe. Hidden on "split" itself, where it would do nothing —
+                that IS the globe — but shown from "focus" onward, since deselecting a pin
+                is otherwise only discoverable by clicking the same pin a second time. */}
+            {stage !== "split" && (
+              <button
+                onClick={returnToGlobe}
+                title="Back to the globe"
+                aria-label="Back to the globe"
+                className="rounded-full border border-white/15 bg-[#0a1614]/90 p-2 text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40"
+              >
+                {/* Meridians + equator, not a continent silhouette: it has to read at 16px. */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18" />
+                  <path d="M12 3c2.5 2.6 3.9 5.7 3.9 9s-1.4 6.4-3.9 9c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3z" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={() => setSwitcherOpen((v) => !v)}
+              className="rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40"
+            >
+              {brand.name} Projects {switcherOpen ? "▴" : "▾"}
+            </button>
+          </div>
 
           {switcherOpen && (
             <div className="absolute right-0 top-11 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-white/15 bg-[#0a1614]/97 p-3 shadow-2xl backdrop-blur">
