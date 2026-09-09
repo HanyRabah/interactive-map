@@ -115,3 +115,5 @@ export function removeVillaZones(map: mapboxgl.Map) {
 }
 
 export const VILLA_ZONE_FILL_LAYER = FILL_ID;
+/** Bottom-to-top, so re-stacking them in this order preserves fill < line < label. */
+export const VILLA_ZONE_LAYER_IDS = [FILL_ID, LINE_ID, LABEL_ID];

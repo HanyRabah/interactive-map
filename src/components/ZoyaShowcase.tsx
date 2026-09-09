@@ -60,6 +60,7 @@ import {
   removeVillaZones,
   setVillaZoneHover,
   VILLA_ZONE_FILL_LAYER,
+  VILLA_ZONE_LAYER_IDS,
   type VillaZone,
 } from "./VillaZoneLayer";
 import { addGoogleImageryLayer, removeGoogleImageryLayer } from "./GoogleImageryLayer";
@@ -614,6 +615,20 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     : "";
   const revealedName = useScrambleReveal(selectedProject?.name ?? "", selectedPinId);
   const revealedCoords = useScrambleReveal(selectedCoordsTarget, selectedPinId);
+
+  // Mapbox stacks layers in insertion order, and both overlay sets are created once at
+  // style.load — long before the masterplan raster that later drapes over the site. Left
+  // alone, every shape you trace renders UNDERNEATH the graphic you are tracing it on.
+  // Re-stacking is cheaper and less brittle than threading a beforeId through the masterplan
+  // layer modules, which would have to know about overlays they otherwise never touch.
+  // Order here is the final z-order: zones, then the live trace on top of them.
+  function raiseOverlays() {
+    const m = map.current;
+    if (!m) return;
+    for (const id of [...VILLA_ZONE_LAYER_IDS, "boundary-draw-fill", "boundary-draw-line", "boundary-draw-points"]) {
+      if (m.getLayer(id)) m.moveLayer(id);
+    }
+  }
 
   function renderBoundaryDraw(points: [number, number][]) {
     const m = map.current;
@@ -1417,6 +1432,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     drawPointsRef.current = [];
     setDrawPoints([]);
     renderBoundaryDraw([]);
+    raiseOverlays();
     setDrawMode(true);
     drawModeRef.current = true;
     m.dragRotate.disable();
@@ -1678,6 +1694,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     const mount = () => {
       if (cancelled || !map.current) return;
       drawVillaZones(map.current, zones, ACCENT);
+      raiseOverlays();
     };
     if (m.isStyleLoaded()) mount();
     else m.once("idle", mount);
