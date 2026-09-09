@@ -147,6 +147,12 @@ function placeholderPhoto(seed: string, label: string) {
 
 type Stage = "logo" | "split" | "focus" | "flight" | "hero" | "masterplan" | "comingsoon";
 
+// Where the globe sits when nothing is selected — the map is created here, and the "split"
+// stage eases back to it. Anything that lands on a project (hero, masterplan) leaves the
+// camera pitched and rotated over the site, so returning to the globe has to restore all
+// three, not just the zoom.
+const GLOBE_HOME_CENTER: [number, number] = [35, 26];
+
 
 
 // Rest-state padding, as a fraction of viewport width, for the split layout — pulls the
@@ -727,7 +733,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/satellite-streets-v12",
       projection: "globe",
-      center: [35, 26],
+      center: GLOBE_HOME_CENTER,
       zoom: -1.3,
       pitch: 0,
       attributionControl: false,
@@ -894,6 +900,13 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     }
     if (stage === "split") {
       m.easeTo({
+        // center/pitch/bearing are a reset, not decoration: arriving here from a project
+        // (globe button, or deselecting a pin) leaves the camera tilted ~60° and rotated
+        // over the site, which read as the globe returning to some arbitrary angle. On the
+        // logo -> split path these are already the current values, so it costs nothing.
+        center: GLOBE_HOME_CENTER,
+        pitch: 0,
+        bearing: 0,
         zoom: 1.6,
         padding: { left: sidePadding, right: 0, top: 0, bottom: 0 },
         duration: 1600,
