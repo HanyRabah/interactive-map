@@ -3,12 +3,10 @@ import config from "@payload-config";
 import type { Project, ProjectCrmConfig } from "@/data/projects";
 import type { CatalogClient, CatalogProvider } from "../provider";
 
-// Reads the catalog from Payload (the /admin panel). The CMS is authoritative: whatever
-// /admin holds is exactly what the nav, the globe pins and the project switcher show. The
-// in-repo PROJECTS array is a fallback for one case only — an empty CMS — so a fresh
-// database still renders something instead of a blank globe. It is NOT merged: merging
-// meant projects nobody could see in /admin kept appearing in the UI, unfixable by the
-// admin because they lived in code.
+// Reads the catalog from Payload (the /admin panel). Merges OVER the in-repo PROJECTS
+// array: a CMS document whose slug matches an in-repo project replaces it; new slugs are
+// appended. That keeps the demo projects (Zoya, BEC) alive while the CMS is still empty,
+// and lets the admin override or extend them without touching code — the whole point.
 //
 // CRM credentials entered in the admin panel ride along on the Project as `crm`, which is
 // SERVER-ONLY routing config for src/lib/crm — the public /api/projects routes must (and
@@ -149,14 +147,12 @@ export class CmsCatalogProvider implements CatalogProvider {
   }
 
   async listProjects(): Promise<Project[]> {
-    const cmsProjects = await this.fetchCmsProjects();
-    if (cmsProjects.length > 0) return cmsProjects;
-    // Empty CMS (fresh database, unseeded environment) — serve the in-repo demo catalog so
-    // the site still renders, but say so loudly: a silent fallback looks like a working
-    // deploy while every nav entry and globe pin is coming from code, not /admin.
-    console.warn("[catalog] CMS holds no projects — falling back to the in-repo demo catalog. Run scripts/seed-cms.mjs.");
     const { CodeCatalogProvider } = await import("./code");
-    return new CodeCatalogProvider().listProjects();
+    const codeProjects = await new CodeCatalogProvider().listProjects();
+    const cmsProjects = await this.fetchCmsProjects();
+    const bySlug = new Map<string, Project>(codeProjects.map((p) => [p.id, p]));
+    for (const p of cmsProjects) bySlug.set(p.id, p); // CMS wins on slug collision
+    return Array.from(bySlug.values());
   }
 
   async getProject(id: string): Promise<Project | null> {
