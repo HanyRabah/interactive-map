@@ -45,6 +45,16 @@ import {
 } from "./ImageMasterplanLayer";
 import { lngLatToMeters, minAreaRect, type MinRect } from "./boundary";
 import { addEsriImageryLayer, removeEsriImageryLayer } from "./EsriImageryLayer";
+import {
+  drawPoiRoute,
+  fetchPoiRoute,
+  formatKm,
+  formatMinutes,
+  removePoiRoute,
+  routeBounds,
+  type PoiRoute,
+} from "./PoiRouteLayer";
+import { POI_ICON_PATHS, poiIconSvg } from "./poiIcons";
 import { addGoogleImageryLayer, removeGoogleImageryLayer } from "./GoogleImageryLayer";
 import type { JourneyImagerySource } from "@/app/api/journey-imagery/route";
 import type { DefaultImagerySource } from "@/app/api/default-imagery/route";
@@ -358,6 +368,18 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const [enquiryPhone, setEnquiryPhone] = useState("");
   const [enquiryCluster, setEnquiryCluster] = useState("");
   const [enquiryStatus, setEnquiryStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  // Points of interest on the hero stage. `poiRoutes` is keyed by POI name and only grows —
+  // a route between two fixed coordinates doesn't change within a session, so re-selecting
+  // one is instant and costs no second Directions request.
+  const [selectedPoi, setSelectedPoi] = useState<string | null>(null);
+  const [poiRoutes, setPoiRoutes] = useState<Record<string, PoiRoute>>({});
+  const [poiLoading, setPoiLoading] = useState<string | null>(null);
+  const poiMarkers = useRef<mapboxgl.Marker[]>([]);
+  // Mirrors for the marker click handlers, which are vanilla listeners bound once per
+  // marker and would otherwise close over these values as they were at mount (same reason
+  // selectPin reads selectedPinIdRef rather than selectedPinId).
+  const selectedPoiRef = useRef<string | null>(null);
+  const poiRoutesRef = useRef<Record<string, PoiRoute>>({});
   const activeProject = catalogProjects.find((p) => p.id === activeProjectId) ?? ZOYA;
   // "2d" when the active project has a real masterplan image (Zoya today) — the flat
   // branded graphic is the more legible default; "3d" for a project with only a model
@@ -506,11 +528,14 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       cancelled = true;
     };
   }, [stage, activeProjectId]);
+
+
   const [logoVisible, setLogoVisible] = useState(false);
   const advancingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
   const [heroVideoFailed, setHeroVideoFailed] = useState(false);
   const [heroVideoVisible, setHeroVideoVisible] = useState(false);
+
   const [sunElevation, setSunElevation] = useState(85);
   const [buildings, setBuildings] = useState<{ name: string; lngLat: [number, number] }[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
@@ -1134,9 +1159,84 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     setMasterplanMode("2d");
   }
 
+  // Select a POI: route to it, draw it, frame it. Selecting the active one again clears the
+  // route and returns the camera to the site — the same click-to-toggle the globe pins use.
+  async function selectPoi(name: string) {
+    const m = map.current;
+    const project = activeProjectRef.current;
+    if (!m || !MAPBOX_TOKEN) return;
+
+    if (selectedPoiRef.current === name) {
+      selectedPoiRef.current = null;
+      setSelectedPoi(null);
+      removePoiRoute(m);
+      const { hero } = viewsFor(project.id);
+      m.flyTo({ center: [project.lng, project.lat], zoom: hero.zoom, pitch: hero.pitch, bearing: hero.bearing, duration: 1800 });
+      return;
+    }
+
+    const poi = (project.pointsOfInterest ?? []).find((p) => p.name === name);
+    if (!poi) return;
+    selectedPoiRef.current = name;
+    setSelectedPoi(name);
+
+    let route = poiRoutesRef.current[name];
+    if (!route) {
+      setPoiLoading(name);
+      const fetched = await fetchPoiRoute([project.lng, project.lat], [poi.lng, poi.lat], MAPBOX_TOKEN);
+      setPoiLoading(null);
+      // Another POI (or a stage change) won the race while this was in flight — its route is
+      // already drawn, so don't stamp this one over it.
+      if (!fetched || selectedPoiRef.current !== name) return;
+      poiRoutesRef.current = { ...poiRoutesRef.current, [name]: fetched };
+      setPoiRoutes(poiRoutesRef.current);
+      route = fetched;
+    }
+
+    if (!map.current) return;
+    drawPoiRoute(map.current, route.coordinates, ACCENT);
+    // Flat and north-up: a route read at an angle is a route nobody can read. The right-hand
+    // padding keeps the whole drive clear of the POI card.
+    const w = mapContainer.current?.clientWidth ?? window.innerWidth;
+    map.current.fitBounds(routeBounds(route.coordinates), {
+      padding: w < 640
+        ? { top: 90, bottom: 220, left: 30, right: 30 }
+        : { top: 90, bottom: 90, left: 80, right: 320 },
+      pitch: 0,
+      bearing: 0,
+      duration: 2200,
+    });
+  }
+
+  // POI markers live only while the site overview is on screen. Mounting and unmounting them
+  // from one effect keyed on the stage means every exit — Explore Masterplan, the globe
+  // button, switching project — tears them down (and the drawn route with them) without each
+  // of those paths having to remember to.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !loaded || stage !== "hero") return;
+    const project = catalogRef.current.find((p) => p.id === activeProjectId);
+    const pois = project?.pointsOfInterest ?? [];
+    for (const poi of pois) {
+      const el = document.createElement("div");
+      el.className = "lmd-poi-marker";
+      el.title = poi.name;
+      el.innerHTML = `${poiIconSvg(poi.category, 15)}<span>${poi.name}</span>`;
+      el.addEventListener("click", () => selectPoi(poi.name));
+      poiMarkers.current.push(new mapboxgl.Marker({ element: el, anchor: "left" }).setLngLat([poi.lng, poi.lat]).addTo(m));
+    }
+    return () => {
+      poiMarkers.current.forEach((marker) => marker.remove());
+      poiMarkers.current = [];
+      removePoiRoute(m);
+    };
+  }, [stage, loaded, activeProjectId]);
+
   function openMasterplan() {
     const m = map.current;
     if (!m) return;
+    selectedPoiRef.current = null;
+    setSelectedPoi(null);
     const project = activeProjectRef.current;
     atmosphereTarget.current = 0.35;
     setTopView(false);
@@ -1439,6 +1539,8 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     setTopView(false);
     atmosphereTarget.current = 0.6;
     returningToGlobeRef.current = true;
+    selectedPoiRef.current = null;
+    setSelectedPoi(null);
     // The focus card and the pin highlight both belong to the project being left.
     setFocusPanelVisible(false);
     setFocusPanelMounted(false);
@@ -1900,6 +2002,47 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           <div className="absolute right-5 top-16 hidden rounded-lg border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[#8fa69e] backdrop-blur sm:block">
             {activeProject.lat.toFixed(4)}°N, {Math.abs(activeProject.lng).toFixed(4)}°E
           </div>
+
+          {/* Nearby — what's around the site and how long the drive actually takes. The
+              markers themselves sit tens of kilometres away, off-screen at this zoom, so
+              this list is the way in; picking a row draws the road and frames it. */}
+          {(activeProject.pointsOfInterest?.length ?? 0) > 0 && (
+            <div className="absolute right-5 top-28 z-10 flex w-60 flex-col gap-1 rounded-2xl border border-white/10 bg-[#0a1614]/90 px-3 py-3 backdrop-blur">
+              <span className="px-1 font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">Nearby</span>
+              {activeProject.pointsOfInterest!.map((poi) => {
+                const route = poiRoutes[poi.name];
+                const active = selectedPoi === poi.name;
+                return (
+                  <button
+                    key={poi.name}
+                    onClick={() => selectPoi(poi.name)}
+                    className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                      active ? "bg-white/10" : "hover:bg-white/5"
+                    }`}
+                  >
+                    <svg
+                      width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                      className="shrink-0"
+                      style={{ color: active ? ACCENT : "#8fa69e" }}
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{ __html: POI_ICON_PATHS[poi.category] }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] leading-tight text-[#f5f3ee]">{poi.name}</span>
+                      <span className="block font-mono text-[9.5px] leading-tight text-[#8fa69e]">
+                        {route
+                          ? `${formatKm(route.km)} · ${formatMinutes(route.minutes)}`
+                          : poiLoading === poi.name
+                            ? "Routing…"
+                            : "Tap for the drive"}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="absolute inset-x-0 bottom-[calc(2rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-4">
             <button

@@ -224,6 +224,45 @@ export default buildConfig({
           ],
         },
 
+        // ---- Points of interest: what's near the site, and how far ----
+        // The hero stage lists these and draws a real driving route to whichever one the
+        // visitor picks. Coordinates are the destination the route ends at, so they should
+        // be the entrance/terminal, not the centre of a large landmark.
+        {
+          name: "pointsOfInterest",
+          type: "array",
+          labels: { singular: "Point of interest", plural: "Points of interest" },
+          admin: { description: "Nearby landmarks — airports, towns, marinas. Listed on the site overview with live driving distance and time." },
+          fields: [
+            { name: "name", type: "text", required: true, admin: { description: "As a buyer would say it, e.g. 'El Alamein International Airport'." } },
+            {
+              name: "category",
+              type: "select",
+              required: true,
+              defaultValue: "landmark",
+              admin: { description: "Picks the icon." },
+              options: [
+                { label: "Airport", value: "airport" },
+                { label: "City / town", value: "city" },
+                { label: "Marina", value: "marina" },
+                { label: "Beach", value: "beach" },
+                { label: "Golf", value: "golf" },
+                { label: "Hospital", value: "hospital" },
+                { label: "School / university", value: "school" },
+                { label: "Shopping", value: "shopping" },
+                { label: "Landmark", value: "landmark" },
+              ],
+            },
+            {
+              type: "row",
+              fields: [
+                { name: "lng", type: "number", required: true },
+                { name: "lat", type: "number", required: true },
+              ],
+            },
+          ],
+        },
+
         // Surveyed site outline, when real data exists — [[lng,lat], …].
         { name: "boundaryPolygon", type: "json", admin: { description: "JSON array of [lng, lat] pairs. Leave empty if unsurveyed." } },
 

@@ -1,6 +1,6 @@
 import { getPayload } from "payload";
 import config from "@payload-config";
-import type { Project, ProjectCrmConfig } from "@/data/projects";
+import type { PoiCategory, PointOfInterest, Project, ProjectCrmConfig } from "@/data/projects";
 import type { CatalogClient, CatalogProvider } from "../provider";
 
 // Reads the catalog from Payload (the /admin panel). The CMS is authoritative: the nav
@@ -37,6 +37,7 @@ type ProjectDoc = {
   masterplanImage?: AssetDoc;
   masterplanParams?: { widthMeters?: number | null; heightMeters?: number | null; rotationDeg?: number | null; offsetE?: number | null; offsetN?: number | null } | null;
   boundaryPolygon?: unknown;
+  pointsOfInterest?: { name?: string | null; category?: string | null; lng?: number | null; lat?: number | null }[] | null;
   crm?: {
     provider?: "mock" | "salesforce" | "sap" | null;
     salesforce?: {
@@ -57,6 +58,22 @@ function assetUrl(asset: AssetDoc): string | undefined {
     if (asset.filename) return `/uploads/${asset.filename}`;
   }
   return undefined;
+}
+
+const POI_CATEGORIES: PoiCategory[] = ["airport", "city", "marina", "beach", "golf", "hospital", "school", "shopping", "landmark"];
+
+// A POI with no coordinates can't be routed to, so it's dropped rather than rendered as a
+// dead row — the admin sees it in /admin either way, which is where it can be fixed.
+function toPois(doc: ProjectDoc): PointOfInterest[] | undefined {
+  const rows = (doc.pointsOfInterest ?? [])
+    .filter((r) => r?.name && r.lng != null && r.lat != null)
+    .map((r) => ({
+      name: r.name as string,
+      category: (POI_CATEGORIES.includes(r.category as PoiCategory) ? r.category : "landmark") as PoiCategory,
+      lng: r.lng as number,
+      lat: r.lat as number,
+    }));
+  return rows.length > 0 ? rows : undefined;
 }
 
 function toCrmConfig(doc: ProjectDoc): ProjectCrmConfig | undefined {
@@ -132,6 +149,7 @@ function toProject(doc: ProjectDoc): Project {
         }
       : undefined,
     boundaryPolygon: Array.isArray(doc.boundaryPolygon) ? (doc.boundaryPolygon as [number, number][]) : undefined,
+    pointsOfInterest: toPois(doc),
     crm: toCrmConfig(doc),
   };
 }

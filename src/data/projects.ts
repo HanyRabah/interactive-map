@@ -44,6 +44,19 @@ export type ProjectCrmConfig =
       currency?: string;
     };
 
+/** Category drives which icon the overview list and the map marker use. */
+export type PoiCategory =
+  | "airport" | "city" | "marina" | "beach" | "golf" | "hospital" | "school" | "shopping" | "landmark";
+
+/** Somewhere near the site worth knowing the drive to. Distance and time are NOT stored —
+ *  they're routed live from the project's coordinates when a visitor asks. */
+export type PointOfInterest = {
+  name: string;
+  category: PoiCategory;
+  lng: number;
+  lat: number;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -69,6 +82,8 @@ export type Project = {
   masterplanImage?: { url: string; params?: ImageMasterplanParams };
   /** Surveyed site outline (real data), when available — skips hand-tracing entirely. */
   boundaryPolygon?: [number, number][];
+  /** Nearby landmarks listed on the site overview, each routable from the site. */
+  pointsOfInterest?: PointOfInterest[];
 };
 
 export const PROJECTS: Project[] = [

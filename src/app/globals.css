@@ -224,3 +224,30 @@ body {
 .lmd-pin-selected .lmd-pin-label {
   border-color: rgba(28, 147, 160, 0.5);
 }
+
+/* POI markers on the site overview. Tens of kilometres from the site, so they only come
+   into view once a route is framed — a bare dot would be unreadable at that distance, hence
+   the label riding alongside. Pointer-events stay on the pill itself so the map is still
+   draggable around it. */
+.lmd-poi-marker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 22, 20, 0.88);
+  backdrop-filter: blur(6px);
+  color: #f5f3ee;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.lmd-poi-marker:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #1c93a0;
+}
