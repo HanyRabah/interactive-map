@@ -117,7 +117,10 @@ const ZOYA_BOUNDARY = [
 async function main() {
   await login();
 
-  const lmd = await upsert("clients", "slug", "lmd", { slug: "lmd", name: "LMD" });
+  // The wordmark ships in-repo as a fallback, but the client record is what the pages
+  // actually read — seed it so a fresh database is CMS-driven rather than falling back.
+  const lmdLogo = await uploadAsset("public/brand/lmd-logo-white.png", "lmd-logo-white.png", "image/png", "LMD wordmark (white, for dark backgrounds)");
+  const lmd = await upsert("clients", "slug", "lmd", { slug: "lmd", name: "LMD", logo: lmdLogo.id });
   const ora = await upsert("clients", "slug", "ora", { slug: "ora", name: "ORA Developers" });
 
   const mpAsset = await uploadAsset("public/media/zoya/masterplan.webp", "masterplan.webp", "image/webp", "Zoya branded masterplan graphic (4096x4096 WebP)");
