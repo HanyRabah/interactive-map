@@ -55,6 +55,13 @@ import {
   type PoiRoute,
 } from "./PoiRouteLayer";
 import { POI_ICON_PATHS, poiIconSvg } from "./poiIcons";
+import {
+  drawVillaZones,
+  removeVillaZones,
+  setVillaZoneHover,
+  VILLA_ZONE_FILL_LAYER,
+  type VillaZone,
+} from "./VillaZoneLayer";
 import { addGoogleImageryLayer, removeGoogleImageryLayer } from "./GoogleImageryLayer";
 import type { JourneyImagerySource } from "@/app/api/journey-imagery/route";
 import type { DefaultImagerySource } from "@/app/api/default-imagery/route";
@@ -361,12 +368,30 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // Live cluster availability state — populated once `stage` exists below (see the effect
   // right after its declaration; it needs `stage` in scope).
   const [clusterAvailability, setClusterAvailability] = useState<ClusterSummary[] | null>(null);
+  // The masterplan's interactive product zones: CMS content (render, size, bedrooms, outline)
+  // joined to live CRM availability, from /api/villa-types.
+  type VillaTypeCard = VillaZone & {
+    area: string;
+    bedroomsText: string;
+    imageUrl?: string;
+    description?: string;
+    availableUnitIds: string[];
+    polygon?: [number, number][];
+  };
+  const [villaTypes, setVillaTypes] = useState<VillaTypeCard[]>([]);
+  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+  const hoveredZoneRef = useRef<string | null>(null);
+  // Which villa type the ?tools=1 polygon tool is currently tracing, if any.
+  const [zoneTargetCode, setZoneTargetCode] = useState<string | null>(null);
+  const zoneTargetCodeRef = useRef<string | null>(null);
+  const [zoneSaveNotice, setZoneSaveNotice] = useState<string | null>(null);
   // The "enquire" form — buyer name/phone/interested-cluster, posted to /api/leads, which
   // routes to the active project's CRM (mock, or a client's real Salesforce, as a Lead).
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [enquiryName, setEnquiryName] = useState("");
   const [enquiryPhone, setEnquiryPhone] = useState("");
   const [enquiryCluster, setEnquiryCluster] = useState("");
+  const [enquiryUnitId, setEnquiryUnitId] = useState("");
   const [enquiryStatus, setEnquiryStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   // Points of interest on the hero stage. `poiRoutes` is keyed by POI name and only grows —
   // a route between two fixed coordinates doesn't change within a session, so re-selecting
@@ -522,6 +547,22 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       .then((r) => r.json())
       .then((data: { clusters?: ClusterSummary[] }) => {
         if (!cancelled && Array.isArray(data.clusters)) setClusterAvailability(data.clusters);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [stage, activeProjectId]);
+
+  // The product zones. Same trigger as availability above — nothing about them is worth a
+  // request while the visitor is still browsing the globe.
+  useEffect(() => {
+    if (stage !== "masterplan") return;
+    let cancelled = false;
+    fetch(`/api/villa-types?projectId=${activeProjectId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { villaTypes?: VillaTypeCard[] }) => {
+        if (!cancelled && Array.isArray(data.villaTypes)) setVillaTypes(data.villaTypes);
       })
       .catch(() => {});
     return () => {
@@ -1304,6 +1345,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     };
   }, [stage, loaded, activeProjectId]);
 
+
   function openMasterplan() {
     const m = map.current;
     if (!m) return;
@@ -1571,17 +1613,45 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     setStage("hero");
   }
 
+  // Opens the enquiry form already knowing which product was clicked, and pre-selects the
+  // first unit that's actually available — the salesperson receiving the Lead should never
+  // have to ask "which one?".
+  function openEnquiryFor(type: VillaTypeCard) {
+    setEnquiryName("");
+    setEnquiryPhone("");
+    setEnquiryCluster(type.code);
+    setEnquiryUnitId(type.availableUnitIds[0] ?? "");
+    setEnquiryStatus("idle");
+    setEnquiryOpen(true);
+  }
+
   async function submitEnquiry() {
     if (!enquiryName.trim()) return;
     setEnquiryStatus("sending");
     try {
+      const type = villaTypes.find((t) => t.code === enquiryCluster);
+      // Everything a salesperson needs to act on the Lead without opening the map: which
+      // product, which unit, which area, and the size that tells two same-named products
+      // apart. Sent as one description because Lead has no per-project custom fields yet.
+      const details = type
+        ? [
+            `Villa type: ${type.name} (${type.areaSqm} m²)`,
+            `Area: ${type.area}`,
+            `Bedrooms: ${type.bedroomsText}`,
+            enquiryUnitId ? `Unit: ${enquiryUnitId}` : `Unit: not specified (${type.available} available)`,
+            `Project: ${activeProject.name}`,
+          ].join("\n")
+        : enquiryCluster
+          ? `Interested in: ${enquiryCluster}`
+          : undefined;
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           contactName: enquiryName.trim(),
           phone: enquiryPhone.trim() || undefined,
-          message: enquiryCluster ? `Interested in: ${enquiryCluster}` : undefined,
+          unitId: enquiryUnitId || undefined,
+          message: details,
           projectId: activeProjectId,
         }),
       });
@@ -1589,6 +1659,104 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       setEnquiryStatus("sent");
     } catch {
       setEnquiryStatus("error");
+    }
+  }
+
+  // Zone layer lifecycle. Mounted only while the 2D masterplan is on screen: the shapes are
+  // traced against that graphic, so over the 3D model or the satellite hero they would sit on
+  // nothing. Leaving the stage tears the layers down with the effect, which is also what stops
+  // them lingering over the globe.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !loaded || stage !== "masterplan" || masterplanMode !== "2d") return;
+    const zones = villaTypes.filter((t) => (t.polygon?.length ?? 0) >= 3) as VillaZone[];
+    if (zones.length === 0) return;
+
+    // The masterplan raster fades in on its own "sourcedata" event; adding the zones before
+    // that lands puts them under a layer that doesn't exist yet, so they end up beneath it.
+    let cancelled = false;
+    const mount = () => {
+      if (cancelled || !map.current) return;
+      drawVillaZones(map.current, zones, ACCENT);
+    };
+    if (m.isStyleLoaded()) mount();
+    else m.once("idle", mount);
+
+    const onMove = (e: mapboxgl.MapLayerMouseEvent) => {
+      const code = e.features?.[0]?.properties?.code as string | undefined;
+      if (!code || code === hoveredZoneRef.current) return;
+      setVillaZoneHover(m, code, hoveredZoneRef.current);
+      hoveredZoneRef.current = code;
+      setHoveredZone(code);
+      m.getCanvas().style.cursor = "pointer";
+    };
+    const onLeave = () => {
+      setVillaZoneHover(m, null, hoveredZoneRef.current);
+      hoveredZoneRef.current = null;
+      setHoveredZone(null);
+      m.getCanvas().style.cursor = "";
+    };
+    const onClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      // While tracing a new zone, clicks belong to the drawing tool — swallowing them here
+      // would make the last few points of a shape silently open an enquiry form instead.
+      if (drawModeRef.current) return;
+      const code = e.features?.[0]?.properties?.code as string | undefined;
+      const type = code ? villaTypes.find((t) => t.code === code) : undefined;
+      if (!type || type.available === 0) return;
+      openEnquiryFor(type);
+    };
+
+    m.on("mousemove", VILLA_ZONE_FILL_LAYER, onMove);
+    m.on("mouseleave", VILLA_ZONE_FILL_LAYER, onLeave);
+    m.on("click", VILLA_ZONE_FILL_LAYER, onClick);
+    return () => {
+      cancelled = true;
+      m.off("mousemove", VILLA_ZONE_FILL_LAYER, onMove);
+      m.off("mouseleave", VILLA_ZONE_FILL_LAYER, onLeave);
+      m.off("click", VILLA_ZONE_FILL_LAYER, onClick);
+      hoveredZoneRef.current = null;
+      m.getCanvas().style.cursor = "";
+      removeVillaZones(m);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEnquiryFor reads refs/setters
+  }, [stage, loaded, masterplanMode, villaTypes]);
+
+  // ---- ?tools=1 zone tracing ----
+  function startZoneDraw(code: string) {
+    zoneTargetCodeRef.current = code;
+    setZoneTargetCode(code);
+    setZoneSaveNotice(null);
+    startDrawing();
+  }
+
+  async function saveZonePolygon() {
+    const code = zoneTargetCodeRef.current;
+    const points = drawPointsRef.current;
+    if (!code || points.length < 3) return;
+    setZoneSaveNotice("Saving…");
+    try {
+      const res = await fetch("/api/villa-types", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, polygon: points, secret: toolsKeyRef.current }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // Re-read rather than patching local state: the API is what the live map reads, so a
+      // round trip is the only proof the shape actually persisted.
+      const fresh = await fetch(`/api/villa-types?projectId=${activeProjectId}`, { cache: "no-store" });
+      const data = (await fresh.json()) as { villaTypes?: VillaTypeCard[] };
+      if (Array.isArray(data.villaTypes)) setVillaTypes(data.villaTypes);
+      setZoneSaveNotice(`Saved ${points.length} points`);
+    } catch (err) {
+      setZoneSaveNotice(`Save failed: ${String(err).slice(0, 80)}`);
+    } finally {
+      zoneTargetCodeRef.current = null;
+      setZoneTargetCode(null);
+      exitDrawMode();
+      drawPointsRef.current = [];
+      setDrawPoints([]);
+      renderBoundaryDraw([]);
+      window.setTimeout(() => setZoneSaveNotice(null), 4000);
     }
   }
 
@@ -2198,6 +2366,81 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             </div>
           </div>
 
+          {/* Zone tracing (?tools=1 only). One row per product, marked with whether it already
+              has an outline — drawing eighteen shapes is a session's work, so the panel has to
+              show what's done at a glance. */}
+          {toolsEnabled && !drawMode && masterplanMode === "2d" && villaTypes.length > 0 && (
+            <div className="absolute left-5 top-32 z-20 max-h-[60vh] w-60 overflow-y-auto rounded-lg border border-white/15 bg-[#0a1614]/95 p-3 backdrop-blur">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee]">
+                Villa zones ({villaTypes.filter((t) => t.polygon).length}/{villaTypes.length})
+              </div>
+              {zoneSaveNotice && (
+                <div className="mb-2 font-mono text-[9px] text-[#8fa69e]">{zoneSaveNotice}</div>
+              )}
+              {Array.from(new Set(villaTypes.map((t) => t.area))).map((area) => (
+                <div key={area} className="mb-2 last:mb-0">
+                  <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.2em] text-[#556661]">{area}</div>
+                  {villaTypes
+                    .filter((t) => t.area === area)
+                    .map((t) => (
+                      <button
+                        key={t.code}
+                        onClick={() => startZoneDraw(t.code)}
+                        className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-[#f5f3ee] hover:bg-white/10"
+                      >
+                        <span className="truncate">
+                          {t.name} <span className="text-[#8fa69e]">{t.areaSqm}m²</span>
+                        </span>
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: t.polygon ? ACCENT : "#3a4a46" }}
+                        />
+                      </button>
+                    ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Hover card for whichever zone the cursor is over: the render, the size, the
+              bedroom line, and how much of it is left. */}
+          {(() => {
+            const t = hoveredZone ? villaTypes.find((v) => v.code === hoveredZone) : undefined;
+            if (!t) return null;
+            return (
+              <div className="pointer-events-none absolute bottom-24 left-5 z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#0a1614]/95 backdrop-blur">
+                {t.imageUrl && (
+                  // Plain <img>: these are Blob-hosted renders shown at a fixed 288px card
+                  // width, so next/image's resizing buys nothing and its loader adds a hop.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.imageUrl} alt={t.name} className="h-36 w-full object-cover" />
+                )}
+                <div className="p-3.5">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">{t.area}</div>
+                  <div className="mt-0.5 text-[15px] leading-tight text-[#f5f3ee]">{t.name}</div>
+                  <div className="mt-2 flex items-baseline gap-2 font-mono text-[10px] text-[#8fa69e]">
+                    <span className="text-[#f5f3ee]">{t.areaSqm} m²</span>
+                    <span>total space</span>
+                  </div>
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#8fa69e]">
+                    {t.bedroomsText}
+                  </div>
+                  <div className="mt-2.5 border-t border-white/10 pt-2.5 font-mono text-[10px] uppercase tracking-[0.15em]">
+                    {t.total === 0 ? (
+                      <span className="text-[#8fa69e]">Availability not published</span>
+                    ) : t.available === 0 ? (
+                      <span className="text-[#8fa69e]">Fully sold — {t.total} units</span>
+                    ) : (
+                      <span style={{ color: ACCENT }}>
+                        {t.available} of {t.total} available — click to enquire
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Live availability, straight from the CRM (mock or the client's real Salesforce
               org) — the "I marked it sold and the map changed" moment. */}
           {clusterAvailability && clusterAvailability.length > 0 && (
@@ -2268,7 +2511,49 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                         placeholder="Phone number"
                         className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-[#f5f3ee] placeholder:text-[#8fa69e]/60 focus:border-white/40 focus:outline-none"
                       />
-                      {clusterAvailability && clusterAvailability.length > 0 ? (
+                      {/* Which product, then which unit of it. Both pickers, not free text:
+                          the Lead is only actionable if the unit number matches a real
+                          Unit__c record, and typing one by hand guarantees it sometimes
+                          won't. */}
+                      {villaTypes.length > 0 ? (
+                        <>
+                          <select
+                            value={enquiryCluster}
+                            onChange={(e) => {
+                              setEnquiryCluster(e.target.value);
+                              const next = villaTypes.find((t) => t.code === e.target.value);
+                              setEnquiryUnitId(next?.availableUnitIds[0] ?? "");
+                            }}
+                            className="rounded-lg border border-white/15 bg-[#0a1614] px-3 py-2 text-sm text-[#f5f3ee] focus:border-white/40 focus:outline-none"
+                          >
+                            {villaTypes.map((t) => (
+                              <option key={t.code} value={t.code} disabled={t.available === 0}>
+                                {t.area} — {t.name} {t.areaSqm}m²
+                                {t.available === 0 ? " (sold out)" : ` (${t.available} available)`}
+                              </option>
+                            ))}
+                          </select>
+                          {(() => {
+                            const t = villaTypes.find((v) => v.code === enquiryCluster);
+                            if (!t || t.availableUnitIds.length === 0) return null;
+                            return (
+                              <select
+                                value={enquiryUnitId}
+                                onChange={(e) => setEnquiryUnitId(e.target.value)}
+                                className="rounded-lg border border-white/15 bg-[#0a1614] px-3 py-2 text-sm text-[#f5f3ee] focus:border-white/40 focus:outline-none"
+                              >
+                                {t.availableUnitIds.map((id) => (
+                                  <option key={id} value={id}>
+                                    Unit {id}
+                                  </option>
+                                ))}
+                              </select>
+                            );
+                          })()}
+                        </>
+                      ) : clusterAvailability && clusterAvailability.length > 0 ? (
+                        // No villa types published for this project — fall back to the
+                        // area-level list rather than showing an empty picker.
                         <select
                           value={enquiryCluster}
                           onChange={(e) => setEnquiryCluster(e.target.value)}
@@ -2314,7 +2599,10 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             <div className="absolute inset-x-0 bottom-8 z-20 flex justify-center">
               <div className="flex items-center gap-3 rounded-full border border-white/15 bg-[#0a1614]/95 px-4 py-2.5 backdrop-blur">
                 <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e]">
-                  Click the map to trace {activeProject.name}&apos;s boundary — {drawPoints.length} point
+                  {zoneTargetCode
+                    ? `Trace ${villaTypes.find((t) => t.code === zoneTargetCode)?.name ?? zoneTargetCode}`
+                    : `Click the map to trace ${activeProject.name}'s boundary`}{" "}
+                  — {drawPoints.length} point
                   {drawPoints.length === 1 ? "" : "s"}
                   {drawPoints.length < 3 && " (need 3+)"}
                 </span>
@@ -2326,18 +2614,22 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                   Undo
                 </button>
                 <button
-                  onClick={cancelDrawing}
+                  onClick={() => {
+                    zoneTargetCodeRef.current = null;
+                    setZoneTargetCode(null);
+                    cancelDrawing();
+                  }}
                   className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] hover:text-[#f5f3ee]"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={finishDrawing}
+                  onClick={zoneTargetCode ? saveZonePolygon : finishDrawing}
                   disabled={drawPoints.length < 3}
                   className="rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#070f0d] disabled:opacity-30"
                   style={{ backgroundColor: ACCENT }}
                 >
-                  Finish
+                  {zoneTargetCode ? "Save zone" : "Finish"}
                 </button>
               </div>
             </div>
