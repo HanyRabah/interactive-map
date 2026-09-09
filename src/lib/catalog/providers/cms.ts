@@ -3,10 +3,12 @@ import config from "@payload-config";
 import type { Project, ProjectCrmConfig } from "@/data/projects";
 import type { CatalogClient, CatalogProvider } from "../provider";
 
-// Reads the catalog from Payload (the /admin panel). Merges OVER the in-repo PROJECTS
-// array: a CMS document whose slug matches an in-repo project replaces it; new slugs are
-// appended. That keeps the demo projects (Zoya, BEC) alive while the CMS is still empty,
-// and lets the admin override or extend them without touching code — the whole point.
+// Reads the catalog from Payload (the /admin panel). The CMS is authoritative: the nav
+// menu, the globe pins and the project switcher show exactly what /admin holds, in the
+// order /admin sets, minus anything unpublished. The in-repo PROJECTS array is a fallback
+// for one case only — a completely empty CMS — so a fresh database still renders something
+// instead of a blank globe. It is NOT merged in: merging meant code-only projects kept
+// appearing in the UI with no way for an admin to remove them.
 //
 // CRM credentials entered in the admin panel ride along on the Project as `crm`, which is
 // SERVER-ONLY routing config for src/lib/crm — the public /api/projects routes must (and
@@ -18,6 +20,8 @@ type ClientRel = { slug?: string | null } | number | null | undefined;
 
 type ProjectDoc = {
   slug: string;
+  published?: boolean | null;
+  order?: number | null;
   name: string;
   developer: string;
   client?: ClientRel;
@@ -141,18 +145,27 @@ export class CmsCatalogProvider implements CatalogProvider {
       collection: "projects",
       depth: 1, // resolve upload relations to their docs (for filenames)
       limit: 200,
+      // not_equals rather than equals: projects created before the `published` field
+      // existed have it as null, and null is not "hidden" — it's "nobody has said".
+      where: { published: { not_equals: false } },
+      // Admin-set order first, then name. Postgres sorts NULLs last on ASC, so a project
+      // with no number falls in behind every numbered one and lands alphabetically among
+      // the other unnumbered ones — a stable list without forcing anyone to number all 14.
+      sort: ["order", "name"],
       overrideAccess: true,
     });
     return (result.docs as unknown as ProjectDoc[]).map(toProject);
   }
 
   async listProjects(): Promise<Project[]> {
-    const { CodeCatalogProvider } = await import("./code");
-    const codeProjects = await new CodeCatalogProvider().listProjects();
     const cmsProjects = await this.fetchCmsProjects();
-    const bySlug = new Map<string, Project>(codeProjects.map((p) => [p.id, p]));
-    for (const p of cmsProjects) bySlug.set(p.id, p); // CMS wins on slug collision
-    return Array.from(bySlug.values());
+    if (cmsProjects.length > 0) return cmsProjects;
+    // Empty CMS (fresh database, unseeded environment). Fall back to the in-repo demo
+    // catalog so the site renders, but say so loudly — a silent fallback looks like a
+    // working deploy while every nav entry and globe pin comes from code, not /admin.
+    console.warn("[catalog] CMS holds no projects — falling back to the in-repo demo catalog. Run scripts/seed-cms.mjs.");
+    const { CodeCatalogProvider } = await import("./code");
+    return new CodeCatalogProvider().listProjects();
   }
 
   async getProject(id: string): Promise<Project | null> {

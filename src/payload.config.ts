@@ -86,7 +86,7 @@ export default buildConfig({
     },
     {
       slug: "projects",
-      admin: { useAsTitle: "name", group: "Catalog", defaultColumns: ["name", "client", "country"], listSearchableFields: ["name", "slug", "developer"] },
+      admin: { useAsTitle: "name", group: "Catalog", defaultColumns: ["name", "client", "country", "published", "order"], listSearchableFields: ["name", "slug", "developer"] },
       hooks: {
         afterChange: [
           async ({ doc }) => {
@@ -98,6 +98,29 @@ export default buildConfig({
         ],
       },
       fields: [
+        // ---- Visibility + ordering: what the nav dropdown and the globe pins actually show ----
+        // Deliberately NOT `required` and with no stored default, so the 14 projects that
+        // predate these fields keep working: the catalog treats null as "published" and
+        // sorts null order last, which means adding these columns changed nothing until an
+        // admin actually sets one.
+        {
+          name: "published",
+          type: "checkbox",
+          defaultValue: true,
+          admin: {
+            position: "sidebar",
+            description: "Unchecked: the project stays editable here but disappears from the nav menu and the globe. Use it to stage a half-filled project.",
+          },
+        },
+        {
+          name: "order",
+          type: "number",
+          admin: {
+            position: "sidebar",
+            description: "Lower numbers come first in the nav menu (1, 2, 3…). Leave empty and the project sorts alphabetically, after everything that has a number.",
+          },
+        },
+
         // Identity — slug doubles as the map's project id and the default CRM external id.
         { name: "slug", type: "text", required: true, unique: true, admin: { description: "URL-safe id, e.g. zoya-ghazala-bay. Also the map's project id." } },
         { name: "name", type: "text", required: true },
