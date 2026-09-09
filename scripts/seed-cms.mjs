@@ -1,7 +1,11 @@
-// Seeds the Payload CMS with the complete demo catalog: admin user, clients (LMD, ORA),
-// real Zoya/BEC assets, and every LMD-roster project. Idempotent — safe to re-run after
-// a database reset (it registers the first user itself) or against a live DB (existing
-// docs are PATCHed by slug, assets reused by filename).
+// Seeds the Payload CMS with the demo catalog: admin user, clients (LMD, ORA), Zoya's real
+// assets, and the LMD roster. Idempotent — safe to re-run after a database reset (it
+// registers the first user itself) or against a live DB (existing docs are PATCHed by slug,
+// assets reused by filename).
+//
+// It seeds a STARTING POINT, not the truth: /admin owns the catalog now, so anything added
+// or deleted there must not be resurrected here. BEC and LMD New Capital were deleted in
+// /admin and are deliberately absent below — don't add a project back without checking.
 //
 //   node scripts/seed-cms.mjs            (server must be running on :3000)
 //
@@ -103,7 +107,6 @@ function zoyaCrm() {
 
 const CAL_ZOYA = { scale: 1, rotationDeg: 0, offsetE: -55, offsetN: 537, offsetUp: 0 };
 const CAL_ZOYA_LAGOON = { scale: 1, rotationDeg: 0, offsetE: 0, offsetN: 0, offsetUp: 0 };
-const CAL_BEC = { scale: 9.366, rotationDeg: -104, offsetE: -15, offsetN: 90, offsetUp: 0 };
 const ZOYA_BOUNDARY = [
   [28.588756, 31.013028], [28.591625, 31.01253], [28.590335, 31.018742], [28.590467, 31.019031],
   [28.593066, 31.021013], [28.594135, 31.021913], [28.596454, 31.023079], [28.596636, 31.023246],
@@ -126,7 +129,6 @@ async function main() {
   const mpAsset = await uploadAsset("public/media/zoya/masterplan.webp", "masterplan.webp", "image/webp", "Zoya branded masterplan graphic (4096x4096 WebP)");
   const zoyaGlb = await uploadAsset("public/models/zoya-ghazala-bay.glb", "zoya-ghazala-bay.glb", "model/gltf-binary", "Zoya masterplan 3D model (Draco-optimized, 28MB)");
   const lagoonGlb = await uploadAsset("public/models/zoya-lagoon.glb", "zoya-lagoon.glb", "model/gltf-binary", "Zoya lagoon 3D model (Draco-optimized, 18MB)");
-  const becGlb = await uploadAsset("public/models/bec.glb", "bec.glb", "model/gltf-binary", "BEC photogrammetry model (original 84MB, kept un-optimized per client request)");
 
   const base = (slug, name, country, countryCode, extras = {}) => ({
     slug, name, country, countryCode,
@@ -144,15 +146,16 @@ async function main() {
     masterplanParams: { widthMeters: 1826, heightMeters: 1826, rotationDeg: -0.3, offsetE: -88, offsetN: -498 },
     boundaryPolygon: ZOYA_BOUNDARY,
     crm: zoyaCrm(),
+    // Coordinates sourced, not estimated: the airport from its Wikipedia entry
+    // (30°55'28"N 28°27'41"E), New Alamein from its own. The site overview routes to these
+    // live, so they only need to be the right place — never a distance or a drive time.
+    pointsOfInterest: [
+      { name: "El Alamein International Airport", category: "airport", lng: 28.46139, lat: 30.92444 },
+      { name: "New Alamein City", category: "city", lng: 28.905611, lat: 30.856 },
+    ],
   }));
-  await upsert("projects", "slug", "bec", base("bec", "BEC", "Egypt", "EG", {
-    lng: 34.757373, lat: 28.067182, precision: "exact",
-    model: becGlb.id, modelCalibration: CAL_BEC,
-  }));
-
   // LMD's public roster (lmd.com.eg) — honest coming-soon entries until assets exist.
   await upsert("projects", "slug", "one-ninety", base("one-ninety", "One Ninety", "Egypt", "EG", { lng: 31.4025592, lat: 30.0133243, precision: "exact" }));
-  await upsert("projects", "slug", "lmd-capital", base("lmd-capital", "LMD, New Capital", "Egypt", "EG", { lng: 31.7357, lat: 30.0192, precision: "district" }));
   await upsert("projects", "slug", "mindset", base("mindset", "Mindset", "Egypt", "EG", { lng: 30.9756, lat: 30.0131, precision: "district" }));
   await upsert("projects", "slug", "8ight", base("8ight", "8ight", "Egypt", "EG")); // area not confirmed — no pin
   await upsert("projects", "slug", "3sixty", base("3sixty", "3'Sixty", "Egypt", "EG", { lng: 31.49, lat: 30.03, precision: "district" }));
