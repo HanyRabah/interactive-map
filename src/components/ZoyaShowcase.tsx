@@ -534,6 +534,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const logoZoomHiddenRef = useRef(false);
   const [focusPanelVisible, setFocusPanelVisible] = useState(false);
   const [focusPanelMounted, setFocusPanelMounted] = useState(false);
+  // Set by the globe button so the "split" easeTo knows it's a retreat from a project (long
+  // and gentle) rather than the entrance from the logo (quick and deliberate). A ref, not
+  // state: the choreography effect only needs it on the render the stage change already
+  // causes, and a second render would just restart the animation.
+  const returningToGlobeRef = useRef(false);
 
   const selectedProject = selectedPinId === "zoya" ? { name: "Zoya", country: "Egypt" } : roster.find((p) => p.id === selectedPinId);
   const selectedLngLat: [number, number] | undefined =
@@ -899,6 +904,12 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       if (m.getLayer(BLACK_MARBLE_LAYER_ID)) m.setPaintProperty(BLACK_MARBLE_LAYER_ID, "raster-opacity", 1);
     }
     if (stage === "split") {
+      // A retreat from a landed project covers far more ground than the logo entrance — from
+      // a pitched, rotated, city-scale view all the way back to the whole globe — so it gets
+      // longer and a symmetric ease: it drifts out of the site rather than snapping away,
+      // and settles into the globe rather than braking into it.
+      const returning = returningToGlobeRef.current;
+      returningToGlobeRef.current = false;
       m.easeTo({
         // center/pitch/bearing are a reset, not decoration: arriving here from a project
         // (globe button, or deselecting a pin) leaves the camera tilted ~60° and rotated
@@ -909,11 +920,15 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
         bearing: 0,
         zoom: 1.6,
         padding: { left: sidePadding, right: 0, top: 0, bottom: 0 },
-        duration: 1600,
-        // Standard ease-out cubic: starts moving immediately (no held-still opening beat)
-        // and decelerates into rest — reads as quick and deliberate rather than the previous
-        // slow-hold-then-rush curve, which is what made the whole entrance feel sluggish.
-        easing: (t) => 1 - Math.pow(1 - t, 3),
+        duration: returning ? 3000 : 1600,
+        easing: returning
+          // Ease-in-out cubic: eases away from the project and eases into the globe, no hard
+          // edge at either end.
+          ? (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+          // Standard ease-out cubic: starts moving immediately (no held-still opening beat)
+          // and decelerates into rest — reads as quick and deliberate rather than the previous
+          // slow-hold-then-rush curve, which is what made the whole entrance feel sluggish.
+          : (t) => 1 - Math.pow(1 - t, 3),
       });
       // Pins pop in only once the globe itself has fully settled, not while it's still
       // mid-approach — "moveend" fires exactly when this easeTo actually finishes.
@@ -1423,6 +1438,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     exitDrawMode();
     setTopView(false);
     atmosphereTarget.current = 0.6;
+    returningToGlobeRef.current = true;
     // The focus card and the pin highlight both belong to the project being left.
     setFocusPanelVisible(false);
     setFocusPanelMounted(false);
