@@ -147,13 +147,18 @@ function buildNavItems(opts: SiteNavProps): NavItem[] {
     items.push(...media);
   }
 
-  items.push({
-    id: "enquire",
-    label: "Enquire",
-    icon: "enquire",
-    startsGroup: items.length > 0,
-    onSelect: opts.onEnquire,
-  });
+  // Masterplan only. Enquiring means naming a villa and a unit, and the product list is only
+  // fetched once the masterplan is open — from the site overview the form would come up with
+  // an empty picker and nothing to submit.
+  if (opts.stage === "masterplan") {
+    items.push({
+      id: "enquire",
+      label: "Enquire",
+      icon: "enquire",
+      startsGroup: items.length > 0,
+      onSelect: opts.onEnquire,
+    });
+  }
 
   return items;
 }
@@ -172,6 +177,8 @@ export function SiteNav(props: SiteNavProps) {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
   }, []);
+
+  if (items.length === 0) return null;
 
   return (
     <nav
