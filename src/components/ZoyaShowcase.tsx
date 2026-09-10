@@ -2407,7 +2407,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       {filmOpen && activeProject.filmUrl && (
         <FilmOverlay
           src={activeProject.filmUrl}
-          title={`${activeProject.name} · Film`}
+          title={`${activeProject.name} · Video`}
           onClose={() => setFilmOpen(false)}
         />
       )}

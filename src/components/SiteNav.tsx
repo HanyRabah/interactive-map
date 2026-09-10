@@ -140,7 +140,7 @@ function buildNavItems(opts: SiteNavProps): NavItem[] {
   // a greyed-out control in front of a client is a promise the demo cannot keep.
   const media: NavItem[] = [];
   if (opts.virtualTourUrl) media.push({ id: "tour", label: "Virtual tour", icon: "tour", href: opts.virtualTourUrl });
-  if (opts.filmUrl) media.push({ id: "film", label: "Film", icon: "film", onSelect: opts.onFilm });
+  if (opts.filmUrl) media.push({ id: "film", label: "Video", icon: "film", onSelect: opts.onFilm });
   if (opts.galleryUrl) media.push({ id: "gallery", label: "Gallery", icon: "gallery", href: opts.galleryUrl });
   if (media.length > 0) {
     media[0].startsGroup = items.length > 0;
@@ -250,8 +250,12 @@ export function SiteNav(props: SiteNavProps) {
   );
 }
 
-// The film overlay. A modal is right here: the film wants the screen, and everything behind
+// The video overlay. A modal is right here: the video wants the screen, and everything behind
 // it is a map that would keep animating under a non-modal player.
+//
+// "film" survives as the internal name — the field, the icon key, this component — because
+// renaming a stored column to match a label change is a migration for no gain. Everything a
+// person reads says Video.
 export function FilmOverlay({
   src,
   title,
