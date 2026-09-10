@@ -64,6 +64,7 @@ export function drawPoiRoute(map: mapboxgl.Map, coordinates: [number, number][],
     geometry: { type: "LineString", coordinates },
   };
 
+  if (!map.getStyle()) return;
   const existing = map.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
   if (existing) {
     existing.setData(geojson);
@@ -88,6 +89,7 @@ export function drawPoiRoute(map: mapboxgl.Map, coordinates: [number, number][],
 }
 
 export function removePoiRoute(map: mapboxgl.Map) {
+  if (!map.getStyle()) return;
   for (const id of [LINE_ID, CASING_ID]) if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }

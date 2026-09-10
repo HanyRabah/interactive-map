@@ -16,11 +16,31 @@ const LABEL_ID = "villa-zones-label";
 export type VillaZone = {
   code: string;
   name: string;
+  /** Masterplan area — decides the zone's colour. */
+  area: string;
   areaSqm: number;
   available: number;
   total: number;
   polygon: [number, number][];
 };
+
+// One hue per masterplan area, so the three neighbourhoods separate at a glance without
+// reading a single label. Chosen against what is actually underneath them — sand, vegetation
+// and water — rather than as a generic categorical ramp: teal for the seafront, coral and
+// violet because both stay distinct from dune and planting at any zoom. The order is fixed
+// rather than derived, so a new area appended in /admin cannot recolour the existing three.
+export const AREA_COLORS: Record<string, string> = {
+  "Sea Vil": "#1c93a0",
+  "Isle Vil": "#e0714f",
+  "Coconut Condo": "#9b8cf0",
+};
+const FALLBACK_COLOR = "#7f9d96";
+/** Sold out reads grey whatever its area — the lens exists to show what is gone. */
+const SOLD_OUT_COLOR = "#7b8b86";
+
+export function areaColor(area: string): string {
+  return AREA_COLORS[area] ?? FALLBACK_COLOR;
+}
 
 function toFeatureCollection(zones: VillaZone[]): GeoJSON.FeatureCollection<GeoJSON.Polygon> {
   return {
@@ -32,10 +52,10 @@ function toFeatureCollection(zones: VillaZone[]): GeoJSON.FeatureCollection<GeoJ
       id: z.code,
       properties: {
         code: z.code,
+        color: z.total > 0 && z.available === 0 ? SOLD_OUT_COLOR : areaColor(z.area),
         // Both halves of the label, because two products can share a name and only the size
         // tells them apart.
         label: `${z.name} · ${z.areaSqm}m²`,
-        soldOut: z.total > 0 && z.available === 0 ? 1 : 0,
       },
       geometry: {
         type: "Polygon",
@@ -46,7 +66,12 @@ function toFeatureCollection(zones: VillaZone[]): GeoJSON.FeatureCollection<GeoJ
   };
 }
 
-export function drawVillaZones(map: mapboxgl.Map, zones: VillaZone[], accent: string) {
+// isStyleLoaded() is the wrong question: it means "every source has finished loading", which
+// a map over continuously-streaming raster tiles is rarely in. The style getters only need the
+// style to EXIST — undefined before it is set and after the map is removed, where they throw
+// rather than return undefined. getStyle() answers exactly that and never throws.
+export function drawVillaZones(map: mapboxgl.Map, zones: VillaZone[]) {
+  if (!map.getStyle()) return;
   const data = toFeatureCollection(zones.filter((z) => z.polygon.length >= 3));
 
   const existing = map.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
@@ -62,10 +87,8 @@ export function drawVillaZones(map: mapboxgl.Map, zones: VillaZone[], accent: st
     type: "fill",
     source: SOURCE_ID,
     paint: {
-      // Sold-out products read grey rather than accent: the point of the lens is that you can
-      // see what's gone without reading a number.
-      "fill-color": ["case", ["==", ["get", "soldOut"], 1], "#6b7d78", accent],
-      "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.45, 0.16],
+      "fill-color": ["get", "color"],
+      "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.42, 0.15],
     },
   });
 
@@ -75,7 +98,7 @@ export function drawVillaZones(map: mapboxgl.Map, zones: VillaZone[], accent: st
     source: SOURCE_ID,
     layout: { "line-join": "round" },
     paint: {
-      "line-color": ["case", ["==", ["get", "soldOut"], 1], "#8fa69e", accent],
+      "line-color": ["get", "color"],
       "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.5, 1.2],
       "line-opacity": 0.9,
     },
@@ -104,12 +127,13 @@ export function drawVillaZones(map: mapboxgl.Map, zones: VillaZone[], accent: st
 }
 
 export function setVillaZoneHover(map: mapboxgl.Map, code: string | null, previous: string | null) {
-  if (!map.getSource(SOURCE_ID)) return;
+  if (!map.getStyle() || !map.getSource(SOURCE_ID)) return;
   if (previous) map.setFeatureState({ source: SOURCE_ID, id: previous }, { hover: false });
   if (code) map.setFeatureState({ source: SOURCE_ID, id: code }, { hover: true });
 }
 
 export function removeVillaZones(map: mapboxgl.Map) {
+  if (!map.getStyle()) return;
   for (const id of [LABEL_ID, LINE_ID, FILL_ID]) if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }

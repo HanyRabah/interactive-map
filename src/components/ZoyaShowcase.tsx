@@ -55,8 +55,9 @@ import {
   type PoiRoute,
 } from "./PoiRouteLayer";
 import { POI_ICON_PATHS, poiIconSvg } from "./poiIcons";
-import { FilmOverlay, SiteRail } from "./SiteRail";
+import { FilmOverlay, NavGlyph, SiteNav } from "./SiteNav";
 import {
+  areaColor,
   drawVillaZones,
   removeVillaZones,
   setVillaZoneHover,
@@ -381,8 +382,17 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     polygon?: [number, number][];
   };
   const [villaTypes, setVillaTypes] = useState<VillaTypeCard[]>([]);
-  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   const hoveredZoneRef = useRef<string | null>(null);
+  // The hover tooltip is positioned imperatively rather than through state: it follows the
+  // cursor across a large polygon, and a React render per mousemove would fight the map for
+  // the same frames.
+  const zoneTipRef = useRef<HTMLDivElement>(null);
+  // Which zone's detail card is open. Hover only lights the polygon now — a card that
+  // appeared and vanished as the cursor crossed the masterplan was unreadable, and you could
+  // not move toward it without losing it.
+  const [openZone, setOpenZone] = useState<string | null>(null);
+  // Only the tooltip's *content* is state; its position is set imperatively above.
+  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   // Which villa type the ?tools=1 polygon tool is currently tracing, if any.
   const [zoneTargetCode, setZoneTargetCode] = useState<string | null>(null);
   const zoneTargetCodeRef = useRef<string | null>(null);
@@ -626,7 +636,10 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // Order here is the final z-order: zones, then the live trace on top of them.
   function raiseOverlays() {
     const m = map.current;
-    if (!m) return;
+    // getLayer reaches through map.style, which is undefined before the style is set and
+    // after the map is torn down — it throws rather than returning undefined, and the throw
+    // lands inside whatever effect called this.
+    if (!m || !m.getStyle()) return;
     for (const id of [...VILLA_ZONE_LAYER_IDS, "boundary-draw-fill", "boundary-draw-line", "boundary-draw-points"]) {
       if (m.getLayer(id)) m.moveLayer(id);
     }
@@ -1690,20 +1703,30 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     const zones = villaTypes.filter((t) => (t.polygon?.length ?? 0) >= 3) as VillaZone[];
     if (zones.length === 0) return;
 
-    // The masterplan raster fades in on its own "sourcedata" event; adding the zones before
-    // that lands puts them under a layer that doesn't exist yet, so they end up beneath it.
     let cancelled = false;
     const mount = () => {
       if (cancelled || !map.current) return;
-      drawVillaZones(map.current, zones, ACCENT);
+      drawVillaZones(map.current, zones);
+      // Re-stack after adding: the masterplan raster is added when the stage opens, which is
+      // usually after these layers, and Mapbox stacks in insertion order.
       raiseOverlays();
     };
-    if (m.isStyleLoaded()) mount();
-    else m.once("idle", mount);
+    // Style presence, not style *idleness* — see drawVillaZones. Waiting for "idle" meant
+    // waiting for every raster tile to settle, which over streaming imagery may never happen.
+    if (m.getStyle()) mount();
+    else m.once("style.load", mount);
 
     const onMove = (e: mapboxgl.MapLayerMouseEvent) => {
       const code = e.features?.[0]?.properties?.code as string | undefined;
-      if (!code || code === hoveredZoneRef.current) return;
+      if (!code) return;
+      const tip = zoneTipRef.current;
+      if (tip) {
+        // Offset up and right of the cursor, flipped near the right edge so the tooltip never
+        // runs off screen on a zone that reaches the far side of the masterplan.
+        const flip = e.point.x > (mapContainer.current?.clientWidth ?? 0) - 220;
+        tip.style.transform = `translate(${e.point.x + (flip ? -12 : 12)}px, ${e.point.y - 14}px) translateX(${flip ? "-100%" : "0"})`;
+      }
+      if (code === hoveredZoneRef.current) return;
       setVillaZoneHover(m, code, hoveredZoneRef.current);
       hoveredZoneRef.current = code;
       setHoveredZone(code);
@@ -1720,9 +1743,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       // would make the last few points of a shape silently open an enquiry form instead.
       if (drawModeRef.current) return;
       const code = e.features?.[0]?.properties?.code as string | undefined;
-      const type = code ? villaTypes.find((t) => t.code === code) : undefined;
-      if (!type || type.available === 0) return;
-      openEnquiryFor(type);
+      // Sold-out products open too: "all gone" is information a buyer asked for by clicking,
+      // and a shape that ignores the click reads as broken rather than as unavailable.
+      if (code) setOpenZone(code);
     };
 
     m.on("mousemove", VILLA_ZONE_FILL_LAYER, onMove);
@@ -1736,8 +1759,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       hoveredZoneRef.current = null;
       m.getCanvas().style.cursor = "";
       removeVillaZones(m);
+      setOpenZone(null);
+      setHoveredZone(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEnquiryFor reads refs/setters
   }, [stage, loaded, masterplanMode, villaTypes]);
 
   // ---- ?tools=1 zone tracing ----
@@ -2082,11 +2106,10 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       {showSwitcherTrigger && (
         <div className="absolute right-5 top-5 z-20 flex flex-col items-end">
           <div className="flex items-center gap-2">
-            {/* Back to the globe, for the stages that have no rail. Hidden on "split" (that
-                IS the globe) and on hero/masterplan, where the rail carries the same action —
-                two buttons for one destination, and on a phone this one landed on top of the
-                wordmark. */}
-            {stage !== "split" && stage !== "hero" && stage !== "masterplan" && (
+            {/* Back to the globe, beside the project switcher — leaving the project belongs
+                with choosing one, not with the controls for the project you are inside.
+                Hidden on "split" itself, where it would do nothing: that IS the globe. */}
+            {stage !== "split" && (
               <button
                 onClick={returnToGlobe}
                 title="Back to the globe"
@@ -2335,7 +2358,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           journey that is pure cinema. Entries whose content does not exist are absent rather
           than disabled, so nothing in front of a client is a dead end. */}
       {(stage === "hero" || stage === "masterplan") && (
-        <SiteRail
+        <SiteNav
           stage={stage}
           label={`${activeProject.name} controls`}
           {...{
@@ -2350,7 +2373,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             // friends) when they run, and handing the bare function to a call made during
             // render is what react-hooks/refs flags. The arrow defers the read to the click,
             // which is where it always happened anyway.
-            onGlobe: () => returnToGlobe(),
             onOverview: () => backToOverview(),
             onOpenMasterplan: () => openMasterplan(),
             onToggleMode: () => toggleMasterplanMode(),
@@ -2445,39 +2467,148 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             </div>
           )}
 
-          {/* Hover card for whichever zone the cursor is over: the render, the size, the
-              bedroom line, and how much of it is left. */}
+          {/* Hover tooltip — names the shape under the cursor and nothing more. The full
+              card is a click away, so passing over the masterplan stays quiet. */}
+          <div
+            ref={zoneTipRef}
+            className={`pointer-events-none absolute left-0 top-0 z-30 origin-top-left rounded-lg border border-white/12 bg-[#08110f]/92 px-2.5 py-1.5 backdrop-blur transition-opacity duration-150 ${
+              hoveredZone ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {(() => {
+              const t = hoveredZone ? villaTypes.find((v) => v.code === hoveredZone) : undefined;
+              if (!t) return null;
+              return (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: areaColor(t.area) }} />
+                    <span className="font-mono text-[8.5px] uppercase tracking-[0.2em] text-[#8fa69e]">{t.area}</span>
+                  </div>
+                  <div className="mt-0.5 whitespace-nowrap text-[12px] leading-tight text-[#f5f3ee]">
+                    {t.name} <span className="text-[#8fa69e]">{t.areaSqm} m²</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Detail card for the clicked zone. Centred and full-size: this is the moment the
+              buyer asked for, so it gets the middle of the screen and a render big enough to
+              sell, not a corner card competing with the masterplan behind it. */}
           {(() => {
-            const t = hoveredZone ? villaTypes.find((v) => v.code === hoveredZone) : undefined;
+            const t = openZone ? villaTypes.find((v) => v.code === openZone) : undefined;
             if (!t) return null;
+            const tint = areaColor(t.area);
+            const quickLinks = [
+              { id: "tour", title: "Virtual tour", href: activeProject.virtualTourUrl, icon: "tour" as const },
+              { id: "gallery", title: "Gallery", href: activeProject.galleryUrl, icon: "gallery" as const },
+              { id: "masterplan", title: "Back to the masterplan", href: undefined, icon: "masterplan" as const },
+            ];
             return (
-              <div className="pointer-events-none absolute bottom-24 left-5 z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#0a1614]/95 backdrop-blur">
-                {t.imageUrl && (
-                  // Plain <img>: these are Blob-hosted renders shown at a fixed 288px card
-                  // width, so next/image's resizing buys nothing and its loader adds a hop.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.imageUrl} alt={t.name} className="h-36 w-full object-cover" />
-                )}
-                <div className="p-3.5">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">{t.area}</div>
-                  <div className="mt-0.5 text-[15px] leading-tight text-[#f5f3ee]">{t.name}</div>
-                  <div className="mt-2 flex items-baseline gap-2 font-mono text-[10px] text-[#8fa69e]">
-                    <span className="text-[#f5f3ee]">{t.areaSqm} m²</span>
-                    <span>total space</span>
-                  </div>
-                  <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#8fa69e]">
-                    {t.bedroomsText}
-                  </div>
-                  <div className="mt-2.5 border-t border-white/10 pt-2.5 font-mono text-[10px] uppercase tracking-[0.15em]">
-                    {t.total === 0 ? (
-                      <span className="text-[#8fa69e]">Availability not published</span>
-                    ) : t.available === 0 ? (
-                      <span className="text-[#8fa69e]">Fully sold — {t.total} units</span>
-                    ) : (
-                      <span style={{ color: ACCENT }}>
-                        {t.available} of {t.total} available — click to enquire
-                      </span>
+              <div
+                className="absolute inset-0 z-40 grid place-items-center bg-[#05100e]/70 p-5 backdrop-blur-[2px]"
+                role="dialog"
+                aria-modal="true"
+                aria-label={t.name}
+                onClick={() => setOpenZone(null)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-[26rem] overflow-hidden rounded-3xl border border-white/12 bg-[#0a1614]/97 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]"
+                >
+                  <div className="relative">
+                    {t.imageUrl && (
+                      // Plain <img>: a Blob-hosted render at one fixed card width, so
+                      // next/image's resizing buys nothing and its loader adds a hop.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.imageUrl} alt={t.name} className="h-56 w-full object-cover" />
                     )}
+                    <button
+                      onClick={() => setOpenZone(null)}
+                      aria-label="Close"
+                      className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-[#07110f]/85 text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/50"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M6 6l12 12M18 6 6 18" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="p-5">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tint }} />
+                      <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#8fa69e]">{t.area}</span>
+                    </div>
+                    <div className="mt-1.5 text-[22px] leading-tight text-[#f5f3ee]">{t.name}</div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-y border-white/10 py-3.5">
+                      <div>
+                        <div className="text-[17px] leading-none text-[#f5f3ee]">{t.areaSqm} m²</div>
+                        <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[#8fa69e]">Total space</div>
+                      </div>
+                      <div>
+                        <div className="text-[13px] leading-tight text-[#f5f3ee]">{t.bedroomsText}</div>
+                      </div>
+                    </div>
+
+                    {/* Per-villa media. The tour and gallery are the project's for now — a
+                        villa-specific tour is a CMS field away, and the icon set is the same
+                        one the header nav uses so they read as the same affordance. */}
+                    <div className="mt-4 flex items-center gap-2">
+                      {quickLinks.map((l) =>
+                        l.href ? (
+                          <a
+                            key={l.id}
+                            href={l.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={l.title}
+                            aria-label={l.title}
+                            className="grid h-10 w-10 place-items-center rounded-full border border-white/12 text-[#c9d6d2] transition-colors hover:border-white/40 hover:text-[#f5f3ee]"
+                          >
+                            <NavGlyph name={l.icon} />
+                          </a>
+                        ) : (
+                          <button
+                            key={l.id}
+                            onClick={() => setOpenZone(null)}
+                            title={l.title}
+                            aria-label={l.title}
+                            className="grid h-10 w-10 place-items-center rounded-full border border-white/12 text-[#c9d6d2] transition-colors hover:border-white/40 hover:text-[#f5f3ee]"
+                          >
+                            <NavGlyph name={l.icon} />
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <div className="mt-4">
+                      {t.total === 0 ? (
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8fa69e]">
+                          Availability not published
+                        </span>
+                      ) : t.available === 0 ? (
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8fa69e]">
+                          Fully sold — {t.total} units
+                        </span>
+                      ) : (
+                        <>
+                          <div className="font-mono text-[10px] uppercase tracking-[0.18em]" style={{ color: tint }}>
+                            {t.available} of {t.total} available
+                          </div>
+                          <button
+                            onClick={() => {
+                              setOpenZone(null);
+                              openEnquiryFor(t);
+                            }}
+                            className="mt-3 w-full rounded-full py-2.5 font-mono text-[10px] uppercase tracking-[0.22em] text-[#070f0d] transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: tint }}
+                          >
+                            Enquire about this villa
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2491,7 +2622,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
               <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">Availability</span>
               {clusterAvailability.map((c) => (
                 <div key={c.cluster} className="flex items-center justify-between gap-6 text-[11px] text-[#f5f3ee]">
-                  <span>{c.cluster}</span>
+                  <span className="flex items-center gap-2">
+                    {/* Doubles as the map legend — the same hue this area's zones are drawn in. */}
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: areaColor(c.cluster) }} />
+                    {c.cluster}
+                  </span>
                   <span className="font-mono text-[#8fa69e]">
                     {c.available} / {c.total}
                   </span>
