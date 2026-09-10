@@ -41,6 +41,7 @@ type ProjectDoc = {
   virtualTourUrl?: string | null;
   galleryUrl?: string | null;
   film?: AssetDoc;
+  filmUrl?: string | null;
   crm?: {
     provider?: "mock" | "salesforce" | "sap" | null;
     salesforce?: {
@@ -155,7 +156,9 @@ function toProject(doc: ProjectDoc): Project {
     pointsOfInterest: toPois(doc),
     virtualTourUrl: doc.virtualTourUrl || undefined,
     galleryUrl: doc.galleryUrl || undefined,
-    filmUrl: assetUrl(doc.film),
+    // The explicit URL wins: it exists precisely because the file was too big for the
+    // uploader, so a stale asset relation must not shadow it.
+    filmUrl: doc.filmUrl || assetUrl(doc.film),
     crm: toCrmConfig(doc),
   };
 }

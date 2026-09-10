@@ -272,7 +272,15 @@ export default buildConfig({
           relationTo: "assets",
           admin: {
             description:
-              "The project film, played in an overlay. Upload rather than linking Drive/YouTube: this serves from the CDN with our own player, no third-party branding, no view throttling.",
+              "The project film, played in an overlay. Upload rather than linking Drive/YouTube: this serves from the CDN with our own player, no third-party branding, no view throttling. Files over ~90MB cannot pass through this uploader — put those in Blob directly and use Film URL below.",
+          },
+        },
+        {
+          name: "filmUrl",
+          type: "text",
+          admin: {
+            description:
+              "Direct CDN URL, for a film too large to upload here (Vercel caps a request body at 100MB, and a 2-minute 1080p master runs past that). Wins over the upload above when both are set. Must be a real video file the browser can stream, not a Drive or YouTube page.",
           },
         },
 
