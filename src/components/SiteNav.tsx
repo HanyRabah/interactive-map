@@ -27,6 +27,7 @@ export type NavItem = {
 };
 
 export type NavIcon =
+  | "nearby"
   | "overview"
   | "masterplan"
   | "cube"
@@ -39,6 +40,8 @@ export type NavIcon =
 // Drawn at 24 on a 24 grid, single 1.5 stroke, so they read as one set at 18px. No glyphs,
 // no emoji — those break the moment the rail sits on a bright patch of the masterplan.
 const ICONS: Record<NavIcon, string> = {
+  // Pin with a sweep, for what is around the site rather than on it.
+  nearby: '<path d="M12 21s6.5-5.4 6.5-10.5a6.5 6.5 0 1 0-13 0C5.5 15.6 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>',
   // Arrow pulling back to the wider view.
   overview: '<path d="M10.5 5.5 4 12l6.5 6.5"/><path d="M4 12h11.5a4.5 4.5 0 0 1 0 9H13"/>',
   // A site plan: parcels inside a boundary.
@@ -94,6 +97,9 @@ export type SiteNavProps = {
   onOpenMasterplan: () => void;
   onToggleMode: () => void;
   onToggleTopView: () => void;
+  hasNearby: boolean;
+  nearbyOpen: boolean;
+  onNearby: () => void;
   onFilm: () => void;
   onEnquire: () => void;
 };
@@ -116,6 +122,18 @@ function buildNavItems(opts: SiteNavProps): NavItem[] {
     }
   } else if (opts.hasMasterplan) {
     items.push({ id: "masterplan", label: "Explore masterplan", icon: "masterplan", onSelect: opts.onOpenMasterplan });
+  }
+
+  // Nearby is a lens on the site, not a link off it, so it sits with the view controls and
+  // marks itself active while its panel is open.
+  if (opts.hasNearby) {
+    items.push({
+      id: "nearby",
+      label: "Nearby",
+      icon: "nearby",
+      onSelect: opts.onNearby,
+      active: opts.nearbyOpen,
+    });
   }
 
   // The finished work that lives outside the map. Absent entries are omitted, never disabled:
@@ -161,7 +179,12 @@ export function SiteNav(props: SiteNavProps) {
       // Top-left, clearing the wordmark. On a phone it becomes a horizontally scrollable
       // strip on its own line, because six labelled controls will not fit 375px and wrapping
       // them into three rows eats the masterplan.
-      className="no-scrollbar absolute left-5 top-14 z-30 flex max-w-[calc(100%-2.5rem)] items-center gap-1 overflow-x-auto rounded-full border border-white/12 bg-[#08110f]/85 p-1 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.85)] backdrop-blur-md sm:left-[7.5rem] sm:top-4 sm:max-w-[calc(100%-20rem)]"
+      // Centred on the screen rather than anchored to the wordmark: the controls belong to
+      // the project, not to the brand mark, and centring keeps them clear of the switcher on
+      // the right at every width. On a phone it stays a horizontally scrollable strip on its
+      // own line — six labelled controls will not fit 375px, and wrapping them into three
+      // rows eats the masterplan.
+      className="no-scrollbar absolute left-1/2 top-14 z-30 flex max-w-[calc(100%-2.5rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full border border-white/12 bg-[#08110f]/85 p-1 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.85)] backdrop-blur-md sm:top-4 sm:max-w-[calc(100%-22rem)]"
     >
       {items.map((item, i) => {
         const content = (

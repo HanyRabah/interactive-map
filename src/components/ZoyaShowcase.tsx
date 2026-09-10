@@ -398,6 +398,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const zoneTargetCodeRef = useRef<string | null>(null);
   const [zoneSaveNotice, setZoneSaveNotice] = useState<string | null>(null);
   const [filmOpen, setFilmOpen] = useState(false);
+  // The Nearby panel is opt-in from the nav rather than always on: it is a lens, and the
+  // first thing a visitor should see on arriving at the site is the site.
+  const [nearbyOpen, setNearbyOpen] = useState(false);
   // The "enquire" form — buyer name/phone/interested-cluster, posted to /api/leads, which
   // routes to the active project's CRM (mock, or a client's real Salesforce, as a Lead).
   const [enquiryOpen, setEnquiryOpen] = useState(false);
@@ -1286,7 +1289,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   useEffect(() => {
     const m = map.current;
     const overlay = poiOverlay.current;
-    if (!m || !overlay || !loaded || stage !== "hero") return;
+    if (!m || !overlay || !loaded || stage !== "hero" || !nearbyOpen) return;
     const project = catalogRef.current.find((p) => p.id === activeProjectId);
     const pois = project?.pointsOfInterest ?? [];
     if (pois.length === 0) return;
@@ -1373,8 +1376,27 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       for (const { el } of pills) el.remove();
       removePoiRoute(m);
     };
-  }, [stage, loaded, activeProjectId]);
+  }, [stage, loaded, activeProjectId, nearbyOpen]);
 
+
+  // The 2D masterplan raster is added once, at flight start, and torn down on the way back
+  // out. Several paths touch it — the journey, Site overview, switching project, and mapbox
+  // 3.28's removeSource quirk, which can drop the layer while leaving the source stranded —
+  // and any one of them failing leaves the site looking like raw satellite with no way back.
+  // Rather than audit every path, the stage re-asserts what it needs: if a stage that should
+  // be showing the masterplan is not, put it back. Re-entry updates the existing source in
+  // place, so this is a no-op in the normal case.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !loaded) return;
+    if (stage !== "hero" && stage !== "masterplan") return;
+    if (masterplanMode !== "2d") return;
+    const project = catalogRef.current.find((p) => p.id === activeProjectId);
+    if (!project?.masterplanImage) return;
+    const id = imageMasterplanId.current;
+    if (id && m.getStyle() && m.getLayer(id)) return;
+    enter2DMasterplan(project);
+  });
 
   function openMasterplan() {
     const m = map.current;
@@ -2295,7 +2317,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           {/* Nearby — what's around the site and how long the drive actually takes. The
               markers themselves sit tens of kilometres away, off-screen at this zoom, so
               this list is the way in; picking a row draws the road and frames it. */}
-          {(activeProject.pointsOfInterest?.length ?? 0) > 0 && (
+          {nearbyOpen && (activeProject.pointsOfInterest?.length ?? 0) > 0 && (
             <div className="absolute right-5 top-28 z-10 flex w-60 flex-col gap-1 rounded-2xl border border-white/10 bg-[#0a1614]/90 px-3 py-3 backdrop-blur">
               <span className="px-1 font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">Nearby</span>
               {activeProject.pointsOfInterest!.map((poi) => {
@@ -2333,23 +2355,6 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[calc(2rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-4">
-            <button
-              onClick={openMasterplan}
-              className="rounded-full border bg-[#0a1614]/80 px-6 py-2.5 font-mono text-[11px] uppercase tracking-[0.25em] text-[#f5f3ee] backdrop-blur transition-colors"
-              style={{ borderColor: `${ACCENT}80` }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = ACCENT;
-                e.currentTarget.style.color = ACCENT;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = `${ACCENT}80`;
-                e.currentTarget.style.color = "#f5f3ee";
-              }}
-            >
-              Explore Masterplan ↓
-            </button>
-          </div>
         </>
       )}
 
@@ -2369,6 +2374,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             virtualTourUrl: activeProject.virtualTourUrl,
             filmUrl: activeProject.filmUrl,
             galleryUrl: activeProject.galleryUrl,
+            hasNearby: stage === "hero" && (activeProject.pointsOfInterest?.length ?? 0) > 0,
+            nearbyOpen,
+            onNearby: () => setNearbyOpen((v) => !v),
             // Wrapped rather than passed by reference: these read refs (activeProjectRef and
             // friends) when they run, and handing the bare function to a call made during
             // render is what react-hooks/refs flags. The arrow defers the read to the click,
