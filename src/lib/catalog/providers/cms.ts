@@ -38,6 +38,9 @@ type ProjectDoc = {
   masterplanParams?: { widthMeters?: number | null; heightMeters?: number | null; rotationDeg?: number | null; offsetE?: number | null; offsetN?: number | null } | null;
   boundaryPolygon?: unknown;
   pointsOfInterest?: { name?: string | null; category?: string | null; lng?: number | null; lat?: number | null }[] | null;
+  virtualTourUrl?: string | null;
+  galleryUrl?: string | null;
+  film?: AssetDoc;
   crm?: {
     provider?: "mock" | "salesforce" | "sap" | null;
     salesforce?: {
@@ -150,6 +153,9 @@ function toProject(doc: ProjectDoc): Project {
       : undefined,
     boundaryPolygon: Array.isArray(doc.boundaryPolygon) ? (doc.boundaryPolygon as [number, number][]) : undefined,
     pointsOfInterest: toPois(doc),
+    virtualTourUrl: doc.virtualTourUrl || undefined,
+    galleryUrl: doc.galleryUrl || undefined,
+    filmUrl: assetUrl(doc.film),
     crm: toCrmConfig(doc),
   };
 }

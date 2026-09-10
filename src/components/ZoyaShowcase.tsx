@@ -55,6 +55,7 @@ import {
   type PoiRoute,
 } from "./PoiRouteLayer";
 import { POI_ICON_PATHS, poiIconSvg } from "./poiIcons";
+import { FilmOverlay, SiteRail } from "./SiteRail";
 import {
   drawVillaZones,
   removeVillaZones,
@@ -386,6 +387,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const [zoneTargetCode, setZoneTargetCode] = useState<string | null>(null);
   const zoneTargetCodeRef = useRef<string | null>(null);
   const [zoneSaveNotice, setZoneSaveNotice] = useState<string | null>(null);
+  const [filmOpen, setFilmOpen] = useState(false);
   // The "enquire" form — buyer name/phone/interested-cluster, posted to /api/leads, which
   // routes to the active project's CRM (mock, or a client's real Salesforce, as a Lead).
   const [enquiryOpen, setEnquiryOpen] = useState(false);
@@ -2080,10 +2082,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
       {showSwitcherTrigger && (
         <div className="absolute right-5 top-5 z-20 flex flex-col items-end">
           <div className="flex items-center gap-2">
-            {/* Back to the globe. Hidden on "split" itself, where it would do nothing —
-                that IS the globe — but shown from "focus" onward, since deselecting a pin
-                is otherwise only discoverable by clicking the same pin a second time. */}
-            {stage !== "split" && (
+            {/* Back to the globe, for the stages that have no rail. Hidden on "split" (that
+                IS the globe) and on hero/masterplan, where the rail carries the same action —
+                two buttons for one destination, and on a phone this one landed on top of the
+                wordmark. */}
+            {stage !== "split" && stage !== "hero" && stage !== "masterplan" && (
               <button
                 onClick={returnToGlobe}
                 title="Back to the globe"
@@ -2327,60 +2330,83 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
         </>
       )}
 
+      {/* The site rail — every control that belongs to standing on a project, in one place.
+          Only from "hero" onward: over the flight it would sit on top of the one part of the
+          journey that is pure cinema. Entries whose content does not exist are absent rather
+          than disabled, so nothing in front of a client is a dead end. */}
+      {(stage === "hero" || stage === "masterplan") && (
+        <SiteRail
+          stage={stage}
+          label={`${activeProject.name} controls`}
+          {...{
+            hasMasterplan: !!activeProject.masterplanImage || !!activeProject.model,
+            has2Dand3D: !!activeProject.masterplanImage && !!activeProject.model,
+            masterplanMode,
+            topView,
+            virtualTourUrl: activeProject.virtualTourUrl,
+            filmUrl: activeProject.filmUrl,
+            galleryUrl: activeProject.galleryUrl,
+            // Wrapped rather than passed by reference: these read refs (activeProjectRef and
+            // friends) when they run, and handing the bare function to a call made during
+            // render is what react-hooks/refs flags. The arrow defers the read to the click,
+            // which is where it always happened anyway.
+            onGlobe: () => returnToGlobe(),
+            onOverview: () => backToOverview(),
+            onOpenMasterplan: () => openMasterplan(),
+            onToggleMode: () => toggleMasterplanMode(),
+            onToggleTopView: () => toggleTopView(),
+            onFilm: () => setFilmOpen(true),
+            onEnquire: () => {
+              // Straight to the first product with something to sell; a client who clicks
+              // Enquire from the rail has not picked a villa yet, and an empty form asks them
+              // to do work the map already knows the answer to.
+              const first = villaTypes.find((t) => t.available > 0);
+              if (first) openEnquiryFor(first);
+              else {
+                setEnquiryName("");
+                setEnquiryPhone("");
+                setEnquiryUnitId("");
+                setEnquiryStatus("idle");
+                setEnquiryOpen(true);
+              }
+            },
+          }}
+        />
+      )}
+
+      {filmOpen && activeProject.filmUrl && (
+        <FilmOverlay
+          src={activeProject.filmUrl}
+          title={`${activeProject.name} · Film`}
+          onClose={() => setFilmOpen(false)}
+        />
+      )}
+
       {/* MASTERPLAN */}
       {stage === "masterplan" && (
         <>
-          {/* One row spanning the full width (left-5 to right-5), not two independently-
-              positioned absolute blocks — two blocks left the status pill overlapping (and
-              blocking clicks on) "← Overview" on mobile. On mobile it's a single
-              horizontally-scrollable strip (no-scrollbar, shrink-0 items) instead of
-              wrapping to 2-3 stacked rows of pills, which ate a large chunk of the screen
-              before any masterplan was visible; sm: restores the wrapped desktop layout,
-              which has the width to spare. */}
-          <div className="no-scrollbar absolute left-5 right-5 top-16 flex flex-nowrap items-center gap-3 overflow-x-auto sm:flex-wrap sm:overflow-visible">
-            <button
-              onClick={backToOverview}
-              className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
-            >
-              ← Overview
-            </button>
+          {/* What used to be a full-width row of control pills across the top. The controls
+              moved into the rail on the left; what remains is status — never actionable, so
+              it sits out of the way on the right instead of competing for the top edge. */}
+          <div className="pointer-events-none absolute right-5 top-16 z-10 flex flex-col items-end gap-2">
+            <div className="rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
+              {activeProject.name} · Interactive Masterplan
+            </div>
             {masterplanMode === "3d" && (
-              <span className="shrink-0 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
+              <div className="rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur">
                 {masterplanLoading
                   ? `Loading model… ${Math.round(masterplanProgress * 100)}%`
                   : `${buildings.length} buildings mapped`}
-              </span>
-            )}
-            {/* Only worth offering when both a real branded graphic and a real calibrated
-                model exist — Zoya today. A project with just one (BEC, so far) has nothing
-                to switch to. */}
-            {activeProject.masterplanImage && activeProject.model && (
-              <button
-                onClick={toggleMasterplanMode}
-                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
-              >
-                {masterplanMode === "2d" ? "View in 3D" : "View 2D Masterplan"}
-              </button>
-            )}
-            {(activeProject.masterplanImage || activeProject.model) && (
-              <button
-                onClick={toggleTopView}
-                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
-              >
-                {topView ? "Perspective View" : "Top View"}
-              </button>
+              </div>
             )}
             {toolsEnabled && !drawMode && (activeProject.model || activeProject.masterplanImage) && (
               <button
                 onClick={startDrawing}
-                className="shrink-0 rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
+                className="pointer-events-auto rounded-full border border-white/15 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur hover:border-white/40"
               >
                 Draw Boundary
               </button>
             )}
-            <div className="shrink-0 rounded-full border border-white/10 bg-[#0a1614]/90 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8fa69e] backdrop-blur sm:ml-auto">
-              {activeProject.name} · Interactive Masterplan
-            </div>
           </div>
 
           {/* Zone tracing (?tools=1 only). One row per product, marked with whether it already

@@ -84,6 +84,12 @@ export type Project = {
   boundaryPolygon?: [number, number][];
   /** Nearby landmarks listed on the site overview, each routable from the site. */
   pointsOfInterest?: PointOfInterest[];
+  /** External 360° tour. The rail hides its entry when absent. */
+  virtualTourUrl?: string;
+  /** External photo gallery. The rail hides its entry when absent. */
+  galleryUrl?: string;
+  /** Project film, served from the CDN and played in an overlay. */
+  filmUrl?: string;
 };
 
 export const PROJECTS: Project[] = [

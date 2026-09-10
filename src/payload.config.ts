@@ -253,6 +253,29 @@ export default buildConfig({
           ],
         },
 
+        // ---- What the site rail links out to ----
+        // Each is optional and each hides its own rail entry when empty: a dead control in
+        // front of a client is worse than one fewer control.
+        {
+          name: "virtualTourUrl",
+          type: "text",
+          admin: { description: "Full URL of the 360° tour. Opens in a new tab." },
+        },
+        {
+          name: "galleryUrl",
+          type: "text",
+          admin: { description: "Full URL of the photo gallery (Pic-Time, etc). Opens in a new tab." },
+        },
+        {
+          name: "film",
+          type: "upload",
+          relationTo: "assets",
+          admin: {
+            description:
+              "The project film, played in an overlay. Upload rather than linking Drive/YouTube: this serves from the CDN with our own player, no third-party branding, no view throttling.",
+          },
+        },
+
         // Media
         { name: "heroVideo", type: "upload", relationTo: "assets" },
         {
