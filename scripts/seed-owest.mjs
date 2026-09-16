@@ -117,6 +117,24 @@ async function main() {
     order: 1,
   });
 
+  // Orascom's other destinations: pinned on the globe and listed in the switcher, no
+  // journey yet — no masterplan or model means they show as coming soon.
+  for (const [i, d] of [
+    { slug: "makadi-heights", name: "Makadi Heights", lng: 33.8880241, lat: 26.9715437 },
+    { slug: "el-gouna", name: "El Gouna", lng: 33.6601748, lat: 27.402723 },
+  ].entries()) {
+    await upsert("projects", "slug", d.slug, {
+      ...d,
+      client: client.id,
+      developer: "Orascom Development",
+      country: "Egypt",
+      countryCode: "EG",
+      precision: "exact",
+      crm: { provider: "mock" },
+      order: i + 2,
+    });
+  }
+
   const hoods = JSON.parse(await readFile("scripts/data/owest-neighborhoods.json", "utf8"));
   const zones = JSON.parse(await readFile("scripts/data/owest-zones.json", "utf8"));
   const dir = "public/media/owest/neighborhoods";
