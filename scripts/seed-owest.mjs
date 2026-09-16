@@ -24,12 +24,11 @@ const EMAIL = process.env.PAYLOAD_ADMIN_EMAIL || "admin@dp.local";
 const PASSWORD = process.env.PAYLOAD_ADMIN_PASSWORD || "cczaanSpFzaL4f";
 
 // Site anchor, supplied by the client (Google Maps pin). Masterplan placement was fitted
-// offline by matching the plan's road network against Mapbox satellite (boulevard, both
-// entrance roundabouts and the apartment blocks land on their real counterparts). The plan's
-// top-left road is the site boulevard, NOT the Wahat highway — fitting it to the highway
-// puts the interior a kilometre out. Fine-tune in-app with ?tools=1 → Adjust position.
+// offline against Mapbox satellite and then corrected by the client in-app (?tools=1 →
+// Adjust position → Copy config). The outlines in owest-zones.json are projected through
+// THESE numbers — change them and re-derive the outlines, or the zones drift off the plan.
 const OWEST = { lng: 30.9956521, lat: 29.956439 };
-const MASTERPLAN = { widthMeters: 3780, heightMeters: 3163, rotationDeg: -2, offsetE: -60, offsetN: 236 };
+const MASTERPLAN = { widthMeters: 3761, heightMeters: 3147, rotationDeg: 3, offsetE: -675, offsetN: 496 };
 
 // OpenStreetMap coordinates; Mapbox's geocoder has no POI coverage for Egypt.
 const POIS = [
