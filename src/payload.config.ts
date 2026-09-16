@@ -120,15 +120,42 @@ export default buildConfig({
         // on their own site, so the hover card shows name + size together and `code` carries
         // the uniqueness.
         { name: "name", type: "text", required: true, admin: { description: "As shown to buyers. Need not be unique — the size disambiguates." } },
+        // Optional, because a zone is not always one product. At Zoya each villa type has its
+        // own plots and its own size; at O West the zone is a neighbourhood and the sizes live
+        // on its unit designs below. The card shows whichever is present.
         {
           type: "row",
           fields: [
-            { name: "areaSqm", type: "number", required: true, admin: { description: "Total space in m²." } },
-            { name: "bedroomsText", type: "text", required: true, admin: { description: "Verbatim, e.g. 3 + Nanny's + Driver's Bedrooms." } },
+            { name: "areaSqm", type: "number", admin: { description: "Total space in m², when the zone is a single product." } },
+            { name: "bedroomsText", type: "text", admin: { description: "Verbatim, e.g. 3 + Nanny's + Driver's Bedrooms." } },
           ],
         },
-        { name: "image", type: "upload", relationTo: "assets", admin: { description: "The render shown on the hover card." } },
+        { name: "image", type: "upload", relationTo: "assets", admin: { description: "The render shown on the card." } },
+        { name: "logo", type: "upload", relationTo: "assets", admin: { description: "Optional — some developers brand each neighbourhood." } },
         { name: "description", type: "textarea" },
+        { name: "brochureUrl", type: "text", admin: { description: "Optional PDF, offered from the card." } },
+        {
+          // The unit designs inside a neighbourhood-scale zone. Sizes are text on purpose:
+          // developers publish ranges ("77 - 195") and mixed types ("1 - 3 Duplex"), and a
+          // number field would force someone to invent a single value.
+          name: "variants",
+          type: "array",
+          labels: { singular: "Unit design", plural: "Unit designs" },
+          admin: { description: "For a zone that is a whole neighbourhood: the unit designs sold inside it." },
+          fields: [
+            { name: "name", type: "text", required: true },
+            { name: "unitType", type: "text", admin: { description: "Apartments, Villa, Townhouse…" } },
+            {
+              type: "row",
+              fields: [
+                { name: "sizeText", type: "text", admin: { description: "e.g. 77 - 195" } },
+                { name: "bedroomsText", type: "text", admin: { description: "e.g. 1 - 4 Penthouse" } },
+                { name: "bathroomsText", type: "text" },
+              ],
+            },
+            { name: "image", type: "upload", relationTo: "assets" },
+          ],
+        },
         {
           name: "polygon",
           type: "json",

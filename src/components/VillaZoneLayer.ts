@@ -18,31 +18,45 @@ export type VillaZone = {
   name: string;
   /** Masterplan area — decides the zone's colour. */
   area: string;
-  areaSqm: number;
+  /** Absent when the zone is a neighbourhood rather than one product. */
+  areaSqm?: number;
   available: number;
   total: number;
   polygon: [number, number][];
 };
 
-// One hue per masterplan area, so the three neighbourhoods separate at a glance without
-// reading a single label. Chosen against what is actually underneath them — sand, vegetation
-// and water — rather than as a generic categorical ramp: teal for the seafront, coral and
-// violet because both stay distinct from dune and planting at any zoom. The order is fixed
-// rather than derived, so a new area appended in /admin cannot recolour the existing three.
+// One hue per masterplan area, so neighbourhoods separate at a glance without reading a
+// label. Zoya's three are pinned — chosen against the sand, planting and water actually
+// underneath them — and fixed so a new area appended in /admin cannot recolour them. Any
+// other area takes the next free palette slot in the order areas first appear in the
+// project's zone list. Position, not a hash: thirteen names hashed into thirteen slots
+// collided five times, and two neighbourhoods sharing a colour defeats the point.
 export const AREA_COLORS: Record<string, string> = {
   "Sea Vil": "#1c93a0",
   "Isle Vil": "#e0714f",
   "Coconut Condo": "#9b8cf0",
 };
-const FALLBACK_COLOR = "#7f9d96";
+// Distinct against green/sand plan graphics and from each other at 15% fill.
+const PALETTE = [
+  "#e2b33c", "#4fa3e0", "#e05c8a", "#5ec48a", "#c77dff", "#f08c3a",
+  "#3fc1c9", "#d94f4f", "#8fd14f", "#f5c0e8", "#1c93a0", "#e0714f", "#9b8cf0",
+];
 /** Sold out reads grey whatever its area — the lens exists to show what is gone. */
 const SOLD_OUT_COLOR = "#7b8b86";
 
-export function areaColor(area: string): string {
-  return AREA_COLORS[area] ?? FALLBACK_COLOR;
+/** Colour lookup for one project's areas. Build once from the zone list, reuse everywhere. */
+export function areaPalette(areas: string[]): (area: string) => string {
+  const slots = new Map<string, string>();
+  let next = 0;
+  for (const a of areas) {
+    if (slots.has(a)) continue;
+    slots.set(a, AREA_COLORS[a] ?? PALETTE[next++ % PALETTE.length]);
+  }
+  return (area) => slots.get(area) ?? AREA_COLORS[area] ?? PALETTE[0];
 }
 
 function toFeatureCollection(zones: VillaZone[]): GeoJSON.FeatureCollection<GeoJSON.Polygon> {
+  const color = areaPalette(zones.map((z) => z.area));
   return {
     type: "FeatureCollection",
     features: zones.map((z) => ({
@@ -52,10 +66,10 @@ function toFeatureCollection(zones: VillaZone[]): GeoJSON.FeatureCollection<GeoJ
       id: z.code,
       properties: {
         code: z.code,
-        color: z.total > 0 && z.available === 0 ? SOLD_OUT_COLOR : areaColor(z.area),
+        color: z.total > 0 && z.available === 0 ? SOLD_OUT_COLOR : color(z.area),
         // Both halves of the label, because two products can share a name and only the size
         // tells them apart.
-        label: `${z.name} · ${z.areaSqm}m²`,
+        label: z.areaSqm ? `${z.name} · ${z.areaSqm}m²` : z.name,
       },
       geometry: {
         type: "Polygon",

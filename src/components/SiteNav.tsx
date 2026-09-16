@@ -35,7 +35,8 @@ export type NavIcon =
   | "tour"
   | "film"
   | "gallery"
-  | "enquire";
+  | "enquire"
+  | "brochure";
 
 // Drawn at 24 on a 24 grid, single 1.5 stroke, so they read as one set at 18px. No glyphs,
 // no emoji — those break the moment the rail sits on a bright patch of the masterplan.
@@ -56,6 +57,8 @@ const ICONS: Record<NavIcon, string> = {
   film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10.5 9.2 4.8 2.8-4.8 2.8z"/>',
   // Stacked frames.
   gallery: '<rect x="3.5" y="6.5" width="14" height="11" rx="1.5"/><path d="M7 6.5V4.5h13.5v11h-2"/><path d="m5.5 15 3.2-3.4 2.4 2.4 2.4-2.8 2.9 3.8z"/>',
+  // A document with a folded corner.
+  brochure: '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/><path d="M9 12h6M9 15.5h6"/>',
   // Envelope.
   enquire: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.6 7 7.3 5.4a2 2 0 0 0 2.2 0L20.4 7"/>',
 };

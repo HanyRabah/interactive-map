@@ -86,9 +86,31 @@ function generateUnits(projectId: string, seeds: ClusterSeed[]): Unit[] {
   return units;
 }
 
+// O West (Orascom, 6th of October): thirteen neighbourhoods, each one zone. The six that
+// list unit designs on owest.com.eg carry demo availability; the seven that list none are
+// seeded entirely sold — the developer knows exactly which of its neighbourhoods are gone,
+// and inventing stock for them in a pitch to that developer would be the one thing they'd
+// notice. Sizes and bedrooms are the first listed design in each; counts and prices are demo.
+const OWEST_SEEDS: ClusterSeed[] = [
+  { cluster: "Club Residence", villaType: "owest-club-residence", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Club Yard", villaType: "owest-club-yard", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Core Apartments", villaType: "owest-core-apartments", count: 36, bedrooms: 1, areaSqm: 77, priceFrom: 4200000, currency: "EGP", availableRate: 0.45, reservedRate: 0.20 },
+  { cluster: "Green Valley", villaType: "owest-green-valley", count: 51, bedrooms: 4, areaSqm: 263, priceFrom: 18400000, currency: "EGP", availableRate: 0.30, reservedRate: 0.25 },
+  { cluster: "Hillside Bliss", villaType: "owest-hillside-bliss", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Hillside", villaType: "owest-hillside", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Mid-Yard", villaType: "owest-mid-yard", count: 30, bedrooms: 1, areaSqm: 80, priceFrom: 4400000, currency: "EGP", availableRate: 0.55, reservedRate: 0.15 },
+  { cluster: "O Views", villaType: "owest-o-views", count: 48, bedrooms: 2, areaSqm: 120, priceFrom: 6600000, currency: "EGP", availableRate: 0.35, reservedRate: 0.30 },
+  { cluster: "Parkside Extension", villaType: "owest-parkside-extension", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Parkside", villaType: "owest-parkside", count: 39, bedrooms: 4, areaSqm: 277, priceFrom: 19400000, currency: "EGP", availableRate: 0.50, reservedRate: 0.20 },
+  { cluster: "Spring Valley", villaType: "owest-spring-valley", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+  { cluster: "Tulwa", villaType: "owest-tulwa", count: 69, bedrooms: 2, areaSqm: 147, priceFrom: 8100000, currency: "EGP", availableRate: 0.40, reservedRate: 0.25 },
+  { cluster: "Whyt", villaType: "owest-whyt", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
+];
+
 const SEEDS_BY_PROJECT: Record<string, ClusterSeed[]> = {
   zoya: ZOYA_SEEDS,
   "zoya-ghazala-bay": ZOYA_SEEDS,
+  "o-west": OWEST_SEEDS,
 };
 
 // Shortlists live in a plain in-memory map — replaces itself on server restart, which

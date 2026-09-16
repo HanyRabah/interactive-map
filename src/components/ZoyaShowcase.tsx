@@ -57,7 +57,7 @@ import {
 import { POI_ICON_PATHS, poiIconSvg } from "./poiIcons";
 import { FilmOverlay, NavGlyph, SiteNav } from "./SiteNav";
 import {
-  areaColor,
+  areaPalette,
   drawVillaZones,
   removeVillaZones,
   setVillaZoneHover,
@@ -375,13 +375,17 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // joined to live CRM availability, from /api/villa-types.
   type VillaTypeCard = VillaZone & {
     area: string;
-    bedroomsText: string;
+    bedroomsText?: string;
     imageUrl?: string;
+    logoUrl?: string;
     description?: string;
+    brochureUrl?: string;
+    variants?: { name: string; unitType?: string; sizeText?: string; bedroomsText?: string; bathroomsText?: string; imageUrl?: string }[];
     availableUnitIds: string[];
     polygon?: [number, number][];
   };
   const [villaTypes, setVillaTypes] = useState<VillaTypeCard[]>([]);
+  const areaColor = useMemo(() => areaPalette(villaTypes.map((t) => t.area)), [villaTypes]);
   const hoveredZoneRef = useRef<string | null>(null);
   // The hover tooltip is positioned imperatively rather than through state: it follows the
   // cursor across a large polygon, and a React render per mousemove would fight the map for
@@ -397,6 +401,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   const [zoneTargetCode, setZoneTargetCode] = useState<string | null>(null);
   const zoneTargetCodeRef = useRef<string | null>(null);
   const [zoneSaveNotice, setZoneSaveNotice] = useState<string | null>(null);
+  // Tools-only: drop the masterplan raster to half opacity so the satellite shows through
+  // while it is being aligned. Off again the moment the tools are.
+  const [overlayGhost, setOverlayGhost] = useState(false);
   const [filmOpen, setFilmOpen] = useState(false);
   // The Nearby panel is opt-in from the nav rather than always on: it is a lens, and the
   // first thing a visitor should see on arriving at the site is the site.
@@ -2443,7 +2450,10 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
               has an outline — drawing eighteen shapes is a session's work, so the panel has to
               show what's done at a glance. */}
           {toolsEnabled && !drawMode && masterplanMode === "2d" && villaTypes.length > 0 && (
-            <div className="absolute left-5 top-32 z-20 max-h-[60vh] w-60 overflow-y-auto rounded-lg border border-white/15 bg-[#0a1614]/95 p-3 backdrop-blur">
+            // Sits below the Adjust-position panel (which starts at 128px and runs ~330px):
+            // both are tools, both need the left edge, and stacking them beats one hiding
+            // the other.
+            <div className="absolute left-5 top-[29rem] z-20 max-h-[calc(100vh-30rem)] w-60 overflow-y-auto rounded-lg border border-white/15 bg-[#0a1614]/95 p-3 backdrop-blur">
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee]">
                 Villa zones ({villaTypes.filter((t) => t.polygon).length}/{villaTypes.length})
               </div>
@@ -2462,7 +2472,8 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                         className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-[#f5f3ee] hover:bg-white/10"
                       >
                         <span className="truncate">
-                          {t.name} <span className="text-[#8fa69e]">{t.areaSqm}m²</span>
+                          {t.name}
+                          {t.areaSqm ? <span className="text-[#8fa69e]"> {t.areaSqm}m²</span> : null}
                         </span>
                         <span
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -2493,7 +2504,8 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                     <span className="font-mono text-[8.5px] uppercase tracking-[0.2em] text-[#8fa69e]">{t.area}</span>
                   </div>
                   <div className="mt-0.5 whitespace-nowrap text-[12px] leading-tight text-[#f5f3ee]">
-                    {t.name} <span className="text-[#8fa69e]">{t.areaSqm} m²</span>
+                    {t.name}
+                    {t.areaSqm ? <span className="text-[#8fa69e]"> {t.areaSqm} m²</span> : null}
                   </div>
                 </>
               );
@@ -2510,8 +2522,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             const quickLinks = [
               { id: "tour", title: "Virtual tour", href: activeProject.virtualTourUrl, icon: "tour" as const },
               { id: "gallery", title: "Gallery", href: activeProject.galleryUrl, icon: "gallery" as const },
+              ...(t.brochureUrl ? [{ id: "brochure", title: "Brochure (PDF)", href: t.brochureUrl, icon: "brochure" as const }] : []),
               { id: "masterplan", title: "Back to the masterplan", href: undefined, icon: "masterplan" as const },
-            ];
+            ].filter((l) => l.href || l.id === "masterplan");
             return (
               <div
                 className="absolute inset-0 z-40 grid place-items-center bg-[#05100e]/70 p-5 backdrop-blur-[2px]"
@@ -2547,17 +2560,47 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tint }} />
                       <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#8fa69e]">{t.area}</span>
                     </div>
-                    <div className="mt-1.5 text-[22px] leading-tight text-[#f5f3ee]">{t.name}</div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 border-y border-white/10 py-3.5">
-                      <div>
-                        <div className="text-[17px] leading-none text-[#f5f3ee]">{t.areaSqm} m²</div>
-                        <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[#8fa69e]">Total space</div>
-                      </div>
-                      <div>
-                        <div className="text-[13px] leading-tight text-[#f5f3ee]">{t.bedroomsText}</div>
-                      </div>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      {t.logoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.logoUrl} alt="" className="h-7 w-auto max-w-[6rem] object-contain" />
+                      )}
+                      <div className="text-[22px] leading-tight text-[#f5f3ee]">{t.name}</div>
                     </div>
+                    {t.description && (
+                      <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed text-[#b9c7c2]">{t.description}</p>
+                    )}
+
+                    {/* A zone is either one product with one size, or a neighbourhood holding
+                        several unit designs. Show whichever this one is; never both. */}
+                    {t.variants && t.variants.length > 0 ? (
+                      <div className="mt-4 max-h-44 overflow-y-auto border-y border-white/10 py-2">
+                        {t.variants.map((v, i) => (
+                          <div key={`${v.name}-${i}`} className="flex items-baseline justify-between gap-3 py-1.5">
+                            <div className="min-w-0">
+                              <div className="truncate text-[12.5px] text-[#f5f3ee]">{v.name}</div>
+                              {v.unitType && (
+                                <div className="font-mono text-[8.5px] uppercase tracking-[0.18em] text-[#8fa69e]">{v.unitType}</div>
+                              )}
+                            </div>
+                            <div className="shrink-0 text-right font-mono text-[10px] text-[#8fa69e]">
+                              {v.sizeText && <span className="text-[#f5f3ee]">{v.sizeText} m²</span>}
+                              {v.bedroomsText && <span className="ml-2">{v.bedroomsText} bed</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (t.areaSqm || t.bedroomsText) ? (
+                      <div className="mt-4 grid grid-cols-2 gap-3 border-y border-white/10 py-3.5">
+                        <div>
+                          {t.areaSqm && <div className="text-[17px] leading-none text-[#f5f3ee]">{t.areaSqm} m²</div>}
+                          <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[#8fa69e]">Total space</div>
+                        </div>
+                        <div>
+                          <div className="text-[13px] leading-tight text-[#f5f3ee]">{t.bedroomsText}</div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {/* Per-villa media. The tour and gallery are the project's for now — a
                         villa-specific tour is a CMS field away, and the icon set is the same
@@ -2612,7 +2655,8 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                             className="mt-3 w-full rounded-full py-2.5 font-mono text-[10px] uppercase tracking-[0.22em] text-[#070f0d] transition-opacity hover:opacity-90"
                             style={{ backgroundColor: tint }}
                           >
-                            Enquire about this villa
+                            {/* A neighbourhood is not a villa; name the thing instead. */}
+                            Enquire about {t.name}
                           </button>
                         </>
                       )}
@@ -2939,6 +2983,20 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                   </button>
                 </div>
               </div>
+              {masterplanMode === "2d" && (
+                <button
+                  onClick={() => {
+                    const m = map.current;
+                    const id = imageMasterplanId.current;
+                    const next = !overlayGhost;
+                    setOverlayGhost(next);
+                    if (m && id && m.getStyle() && m.getLayer(id)) m.setPaintProperty(id, "raster-opacity", next ? 0.45 : 0.95);
+                  }}
+                  className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5f3ee] hover:bg-white/20"
+                >
+                  {overlayGhost ? "Overlay: 45% (see-through)" : "Overlay: solid"}
+                </button>
+              )}
               <div className="mb-2 font-mono text-[9px] leading-relaxed text-[#556661]">
                 {masterplanMode === "2d"
                   ? `${calibImage.widthMeters}×${calibImage.heightMeters}m · ${calibImage.rotationDeg}° · E${calibImage.offsetE} N${calibImage.offsetN}`

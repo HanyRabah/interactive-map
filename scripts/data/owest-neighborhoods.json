@@ -1,0 +1,966 @@
+[
+ {
+  "slug": "club-residence",
+  "name": "Club Residence",
+  "description": "Club Residences, near West Cairo’s largest sports and social club, offers a serene community with lush landscapes, water features, and a perfect blend of luxury and comfort.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/club%20residence%20logo09022025120534.png",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/proj%202%20d09022025120347.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/proj%202%20m09022025120347.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Club%20Residence_11zon19082026154414.pdf",
+  "units": [],
+  "logoFile": "club-residence-logo09022025120534-f3847b.png",
+  "galleryFiles": [
+   "proj-2-d09022025120347-dfd62d.jpg",
+   "proj-2-m09022025120347-d9587f.jpg"
+  ]
+ },
+ {
+  "slug": "club-yard",
+  "name": "Club Yard",
+  "description": "A one of a kind neighborhood with family friendly neighborhood with parks  and green spaces for relaxation for a vibrant and exceptional community experience.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/club-yard11022025184135.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20club%20d12022025125122.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m0902202511451112022025125121.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Clubyard_11zon19082026153406.pdf",
+  "units": [],
+  "logoFile": "club-yard11022025184135-fc7075.webp",
+  "galleryFiles": [
+   "card-club-d12022025125122-c58080.jpg",
+   "card-m0902202511451112022025125121-557dc9.jpg"
+  ]
+ },
+ {
+  "slug": "core-apartments",
+  "name": "Core Apartments",
+  "description": "Find your essence at Core Apartments, designed to help you live your aspirations. Located in O West’s vibrant community, it offers beauty, comfort, and the perfect start.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/fa5255314ee38e54d1192e13c472000c11022025182629.png",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/proj%20card09022025114309.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Core_11zon19082026153635.pdf",
+  "units": [
+   {
+    "name": "Type A",
+    "sqm": "77 - 195",
+    "bedrooms": "1 - 4",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/typea02032025155406.jpg",
+    "top": "41",
+    "left": "59",
+    "imageFile": "typea02032025155406-72f7e0.jpg"
+   },
+   {
+    "name": "Type B",
+    "sqm": "77 - 212",
+    "bedrooms": "1 - 3 Duplex",
+    "bathrooms": "0",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tybe%20b%20ex02032025173313.jpg",
+    "top": "42",
+    "left": "58",
+    "imageFile": "tybe-b-ex02032025173313-15dcd8.jpg"
+   },
+   {
+    "name": "Type A Mirrored",
+    "sqm": "84 - 195",
+    "bedrooms": "1 - 4 Penthouse",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/type%20amirror1f02032025165306.webp",
+    "top": "50",
+    "left": "51",
+    "imageFile": "type-amirror1f02032025165306-74e6c4.webp"
+   },
+   {
+    "name": "Type B  Mirrored",
+    "sqm": "84 - 195",
+    "bedrooms": "1 - 4 Penthouse",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tybe%20b%20mirror03032025131413.jpg",
+    "top": "47",
+    "left": "53",
+    "imageFile": "tybe-b-mirror03032025131413-7f45f0.jpg"
+   },
+   {
+    "name": "Type C",
+    "sqm": "115 - 222",
+    "bedrooms": "1 - 3 Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/type%20c03032025134339.jpg",
+    "top": "47",
+    "left": "58",
+    "imageFile": "type-c03032025134339-7e3671.jpg"
+   },
+   {
+    "name": "Type D",
+    "sqm": "169 - 219",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/New%20Project%20%2833%2916022025130859.jpg",
+    "top": "52",
+    "left": "57",
+    "imageFile": "New-Project-3316022025130859-948e12.jpg"
+   },
+   {
+    "name": "Type D Mirrored",
+    "sqm": "117 - 220",
+    "bedrooms": "3 Loft",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/typeDM-exterior-des13042025022439.webp",
+    "top": "50",
+    "left": "56",
+    "imageFile": "typeDM-exterior-des13042025022439-7af9e0.webp"
+   },
+   {
+    "name": "Type C Mirrored",
+    "sqm": "115 - 222",
+    "bedrooms": "2 - 3 Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/typeCM-exterior12042025063954.webp",
+    "top": "49",
+    "left": "60",
+    "imageFile": "typeCM-exterior12042025063954-641f3f.webp"
+   }
+  ],
+  "logoFile": "fa5255314ee38e54d1192e13c472000c11022025182629-22a296.png",
+  "galleryFiles": [
+   "proj-card09022025114309-1f8ce8.jpg",
+   "card-m09022025114511-6409f4.jpg"
+  ]
+ },
+ {
+  "slug": "green-valley",
+  "name": "Green Valley",
+  "description": "Green Valley Villas offers lush greenery, serene lakes, a fresh fruit and herb garden, and Palm Trees Island, where you can relax, meditate, or exercise in nature’s tranquility.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/green11022025185540.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20green%20d12022025185857.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20green%20m0902202511451112022025185859.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Green%20Valley_11zon19082026152630.pdf",
+  "units": [
+   {
+    "name": "Prime Villa",
+    "sqm": "263",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/prime%20v%20gre31702202513570003032025140953.jpg",
+    "top": "40",
+    "left": "49",
+    "imageFile": "prime-v-gre31702202513570003032025140953-cf7b0e.jpg"
+   },
+   {
+    "name": "Horizon Villa",
+    "sqm": "336",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/HV-des-113042025120737.webp",
+    "top": "67",
+    "left": "43",
+    "imageFile": "HV-des-113042025120737-20caaa.webp"
+   },
+   {
+    "name": "Grand Villa",
+    "sqm": "405",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/GV%201IN04032025163734.jpg",
+    "top": "54",
+    "left": "44",
+    "imageFile": "GV-1IN04032025163734-ec7367.jpg"
+   },
+   {
+    "name": "Single Story Villas",
+    "sqm": "325",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/SSV-des-113042025125550.webp",
+    "top": "60",
+    "left": "44",
+    "imageFile": "SSV-des-113042025125550-38289a.webp"
+   },
+   {
+    "name": "Mansion Villas",
+    "sqm": "517",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/MV-des-113042025131855.webp",
+    "top": "50",
+    "left": "46",
+    "imageFile": "MV-des-113042025131855-237ca5.webp"
+   },
+   {
+    "name": "Grand Mansion",
+    "sqm": "623",
+    "bedrooms": "4",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/GM-des-113042025150753.webp",
+    "top": "45",
+    "left": "45",
+    "imageFile": "GM-des-113042025150753-f7c143.webp"
+   },
+   {
+    "name": "Twin House K Type A",
+    "sqm": "204",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/townhouse%20k13022025010457.jpg",
+    "top": "55",
+    "left": "50",
+    "imageFile": "townhouse-k13022025010457-144ef5.jpg"
+   },
+   {
+    "name": "Twin House K Type B",
+    "sqm": "207",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/townhouse%20k13022025010457.jpg",
+    "top": "0",
+    "left": "0",
+    "imageFile": "townhouse-k13022025010457-144ef5.jpg"
+   },
+   {
+    "name": "Twin House H",
+    "sqm": "260 - 265",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TWINH-des-113042025173059.webp",
+    "top": "69",
+    "left": "37",
+    "imageFile": "TWINH-des-113042025173059-0365ec.webp"
+   },
+   {
+    "name": "Town House G",
+    "sqm": "206 - 211",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TWING-des-113042025180517.webp",
+    "top": "50",
+    "left": "43",
+    "imageFile": "TWING-des-113042025180517-b8ecd1.webp"
+   },
+   {
+    "name": "Town House J",
+    "sqm": "173 - 179",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TOWNJ-des-113042025184858.webp",
+    "top": "73",
+    "left": "39",
+    "imageFile": "TOWNJ-des-113042025184858-a6398e.webp"
+   },
+   {
+    "name": "Town House M",
+    "sqm": "169 - 177",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TypeM-des-ex115042025142219.webp",
+    "top": "50",
+    "left": "48",
+    "imageFile": "TypeM-des-ex115042025142219-3fdb90.webp"
+   },
+   {
+    "name": "Maisonette",
+    "sqm": "136 - 248",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/MANISO-des-ex115042025155633.webp",
+    "top": "61",
+    "left": "38",
+    "imageFile": "MANISO-des-ex115042025155633-b8915d.webp"
+   }
+  ],
+  "logoFile": "green11022025185540-c5ff23.webp",
+  "galleryFiles": [
+   "card-green-d12022025185857-f37e4f.jpg",
+   "card-green-m0902202511451112022025185859-4f6540.jpg"
+  ]
+ },
+ {
+  "slug": "hillside-bliss",
+  "name": "Hillside Bliss",
+  "description": "Hillside Bliss Villas turns nature into everyday therapy. Wake up to serene water sounds, stroll through zen landscapes, and return to a home that fills you with gratitude.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/bliiss11022025203427.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20hille%20d13022025022610.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511%20%281%2913022025022608.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Hillside%20bliss_11zon19082026154302.pdf",
+  "units": [],
+  "logoFile": "bliiss11022025203427-087f47.webp",
+  "galleryFiles": [
+   "card-hille-d13022025022610-c1a7dd.jpg",
+   "card-m09022025114511-113022025022608-d0ed03.jpg"
+  ]
+ },
+ {
+  "slug": "hillside",
+  "name": "Hillside",
+  "description": "Welcome to Hillside, offering bike rides, jogs, and fresh air with stunning views. Find your perfect home among villas, twin houses, and townhouses at O West Hill.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/hill11022025190433.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20hille%20d13022025022610.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511%20%281%2913022025022608.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Hillside%20Townhouse%20%26%20Twinhouse_11zon19082026154140.pdf",
+  "units": [],
+  "logoFile": "hill11022025190433-6f5bff.webp",
+  "galleryFiles": [
+   "card-hille-d13022025022610-c1a7dd.jpg",
+   "card-m09022025114511-113022025022608-d0ed03.jpg"
+  ]
+ },
+ {
+  "slug": "mid-yard",
+  "name": "Mid-Yard",
+  "description": "Mid-Yard Apartments, in the heart of The Yard, offers stylish apartments, green spaces, water features, and a central promenade, creating a hub for creativity and community.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/mid-yard11022025193726.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20mid%20yard%20m0902202511451113022025184709.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/mid%20yard%201%20banner13022025184710.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Midyard%20%281%29%20-%20OLD%20brochure_compressed_compressed-compressed02082026135016.pdf",
+  "units": [
+   {
+    "name": "Type A",
+    "sqm": "80 - 226",
+    "bedrooms": "1 - 3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/mid15022025032111.jpg",
+    "top": "58",
+    "left": "49",
+    "imageFile": "mid15022025032111-ea6c57.jpg"
+   },
+   {
+    "name": "Type A Mirrored",
+    "sqm": "80 - 197",
+    "bedrooms": "1 - 4 Penthouse",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TYPEAM-des-ex15042025171958.webp",
+    "top": "58",
+    "left": "48",
+    "imageFile": "TYPEAM-des-ex15042025171958-bd233f.webp"
+   },
+   {
+    "name": "Type B",
+    "sqm": "72 - 227",
+    "bedrooms": "1 - 3 Loft",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/typeB-des-ex16042025122849.webp",
+    "top": "48",
+    "left": "62",
+    "imageFile": "typeB-des-ex16042025122849-ee86bb.webp"
+   },
+   {
+    "name": "Type B Mirrored",
+    "sqm": "72 - 227",
+    "bedrooms": "1 - 3 Loft",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/typeBM-des-ex16042025132639.webp",
+    "top": "43",
+    "left": "58",
+    "imageFile": "typeBM-des-ex16042025132639-a02ab2.webp"
+   },
+   {
+    "name": "Type C",
+    "sqm": "82 - 154",
+    "bedrooms": "1 - 3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/mid15022025032111.jpg",
+    "top": "43",
+    "left": "59",
+    "imageFile": "mid15022025032111-ea6c57.jpg"
+   },
+   {
+    "name": "Type C Mirrored",
+    "sqm": "82 - 154",
+    "bedrooms": "1 - 3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/mid15022025032111.jpg",
+    "top": "44",
+    "left": "57",
+    "imageFile": "mid15022025032111-ea6c57.jpg"
+   }
+  ],
+  "logoFile": "mid-yard11022025193726-46e807.webp",
+  "galleryFiles": [
+   "card-mid-yard-m0902202511451113022025184709-db5a15.jpg",
+   "mid-yard-1-banner13022025184710-2aa120.jpg"
+  ]
+ },
+ {
+  "slug": "o-views",
+  "name": "O Views",
+  "description": "A premium phase nestled within O West, O Views is thoughtfully designed to elevate everyday living.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/O-VIEWS-LOGO08012026183942.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/o-view-card%20%281%2908012026151800.webp",
+   "https://assets.live.beyond-creation.net/owest/media/library/o-view-card%20%281%2908012026151800.webp"
+  ],
+  "brochure": null,
+  "units": [
+   {
+    "name": "Level Residences A",
+    "sqm": "120 - 169",
+    "bedrooms": "2 - 3",
+    "bathrooms": "3",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/LA-front08012026172157.webp",
+    "top": "64",
+    "left": "55",
+    "imageFile": "LA-front08012026172157-3ff177.webp"
+   },
+   {
+    "name": "Level Residences C",
+    "sqm": "120 - 169",
+    "bedrooms": "2 - 3",
+    "bathrooms": "3",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/LC-FRONT08012026180411.webp",
+    "top": "52",
+    "left": "59",
+    "imageFile": "LC-FRONT08012026180411-47771f.webp"
+   },
+   {
+    "name": "Level Residences B",
+    "sqm": "67 - 148",
+    "bedrooms": "1 - 3",
+    "bathrooms": "1 - 3",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/GF-LB08012026183247.webp",
+    "top": "64",
+    "left": "59",
+    "imageFile": "GF-LB08012026183247-76da1e.webp"
+   },
+   {
+    "name": "Townhouse J",
+    "sqm": "164 - 170",
+    "bedrooms": "3",
+    "bathrooms": "4",
+    "unitType": "Townhouse",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/townj-front11012026190353.webp",
+    "top": "50",
+    "left": "60",
+    "imageFile": "townj-front11012026190353-0c754a.webp"
+   },
+   {
+    "name": "G Villa",
+    "sqm": "227",
+    "bedrooms": "4",
+    "bathrooms": "3 - 5",
+    "unitType": "Standalone Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/g-villa-front11012026214025.webp",
+    "top": "65",
+    "left": "50",
+    "imageFile": "g-villa-front11012026214025-a5f9e4.webp"
+   },
+   {
+    "name": "U Villa 01",
+    "sqm": "213 - 217",
+    "bedrooms": "3",
+    "bathrooms": "3",
+    "unitType": "Standalone Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/U-VILLA-F11012026220711.webp",
+    "top": "54",
+    "left": "53",
+    "imageFile": "U-VILLA-F11012026220711-616100.webp"
+   },
+   {
+    "name": "U Villa 02",
+    "sqm": "212 - 216",
+    "bedrooms": "3",
+    "bathrooms": "3",
+    "unitType": "Standalone Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/U-VILLA2-f12012026121257.webp",
+    "top": "40",
+    "left": "60",
+    "imageFile": "U-VILLA2-f12012026121257-18eed7.webp"
+   },
+   {
+    "name": "Side Villa 01",
+    "sqm": "213",
+    "bedrooms": "3",
+    "bathrooms": "3",
+    "unitType": "Standalone Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/S-VILLA1-F12012026122549.webp",
+    "top": "56",
+    "left": "68",
+    "imageFile": "S-VILLA1-F12012026122549-331a25.webp"
+   },
+   {
+    "name": "Side Villa 02",
+    "sqm": "213",
+    "bedrooms": "3",
+    "bathrooms": "3",
+    "unitType": "Standalone Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/s-villa-front11012026215452.webp",
+    "top": "45",
+    "left": "50",
+    "imageFile": "s-villa-front11012026215452-1071ef.webp"
+   },
+   {
+    "name": "Townhouse M",
+    "sqm": "83 - 237",
+    "bedrooms": "3",
+    "bathrooms": "4",
+    "unitType": "Townhouse",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/TOWNM-F12012026123420.webp",
+    "top": "56",
+    "left": "66",
+    "imageFile": "TOWNM-F12012026123420-4b5fa1.webp"
+   },
+   {
+    "name": "The View Residences",
+    "sqm": "112 - 173",
+    "bedrooms": "2 - 3",
+    "bathrooms": "3 - 4",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/VA-F12012026124049.webp",
+    "top": "58",
+    "left": "60",
+    "imageFile": "VA-F12012026124049-35687f.webp"
+   },
+   {
+    "name": "Signature Twin",
+    "sqm": "176 - 180",
+    "bedrooms": "3",
+    "bathrooms": "3 - 4",
+    "unitType": "Twin Duplex",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/ST-F12012026130317.webp",
+    "top": "37",
+    "left": "55",
+    "imageFile": "ST-F12012026130317-2d3bed.webp"
+   }
+  ],
+  "logoFile": "O-VIEWS-LOGO08012026183942-f701cd.webp",
+  "galleryFiles": [
+   "o-view-card-108012026151800-8650d8.webp",
+   "o-view-card-108012026151800-8650d8.webp"
+  ]
+ },
+ {
+  "slug": "parkside-extension",
+  "name": "Parkside Extension",
+  "description": "Parkside at O West offers more than proximity to nature, it places you at the heart of it. Surrounded by lush landscapes, meandering trails, serene water features and vibrant open-air experiences.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/park-logo08052025170951%20copy1908202615050123082026135801.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/parkside-ex23082026135743.webp",
+   "https://assets.live.beyond-creation.net/owest/media/library/parkside-ex23082026135743.webp"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/PARKSIDE%20EXTENSION%20BROCHURE_1308_compressed_compressed23082026114934.pdf",
+  "units": [],
+  "logoFile": "park-logo08052025170951-copy19082026150501230820-f7d77b.webp",
+  "galleryFiles": [
+   "parkside-ex23082026135743-e879ca.webp",
+   "parkside-ex23082026135743-e879ca.webp"
+  ]
+ },
+ {
+  "slug": "parkside",
+  "name": "Parkside",
+  "description": "Steps from Central Park at O West, enjoy lush views, peaceful trails, and a vibrant community designed for living well every day.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/parkside-logo08052025170951%20copy1908202615050123082026120445.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/park-card08052025171051.webp",
+   "https://assets.live.beyond-creation.net/owest/media/library/park-card08052025171051.webp"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/PARKSIDE%20EXTENSION%20BROCHURE_1308_compressed_compressed23082026114934.pdf",
+  "units": [
+   {
+    "name": "G-VILLA",
+    "sqm": "277",
+    "bedrooms": "4",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/G-Villa-112052025173211.webp",
+    "top": "43",
+    "left": "45",
+    "imageFile": "G-Villa-112052025173211-3bb28d.webp"
+   },
+   {
+    "name": "H-VILLAS",
+    "sqm": "276",
+    "bedrooms": "5",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/H-VILLAS-1-D12052025175732.webp",
+    "top": "65",
+    "left": "47",
+    "imageFile": "H-VILLAS-1-D12052025175732-0b94a1.webp"
+   },
+   {
+    "name": "S-VILLA A",
+    "sqm": "213",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/S-VILLA-1-D12052025181127.webp",
+    "top": "46",
+    "left": "42",
+    "imageFile": "S-VILLA-1-D12052025181127-59f19d.webp"
+   },
+   {
+    "name": "S-VILLA B",
+    "sqm": "212",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/S-B-1-D12052025185812.webp",
+    "top": "47",
+    "left": "41",
+    "imageFile": "S-B-1-D12052025185812-4dcbdb.webp"
+   },
+   {
+    "name": "U-VILLA A",
+    "sqm": "213 - 217",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/u-villa-A-m13052025140658.webp",
+    "top": "54",
+    "left": "35",
+    "imageFile": "u-villa-A-m13052025140658-5d37b7.webp"
+   },
+   {
+    "name": "U-VILLA B",
+    "sqm": "212 - 216",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Villa",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/U-B-113052025170058.webp",
+    "top": "54",
+    "left": "37",
+    "imageFile": "U-B-113052025170058-d82944.webp"
+   },
+   {
+    "name": "TOWNHOUSE M",
+    "sqm": "164 - 172",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Townhouse",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/T-M-113052025180239.webp",
+    "top": "60",
+    "left": "35",
+    "imageFile": "T-M-113052025180239-a0a3ab.webp"
+   },
+   {
+    "name": "TOWNHOUSE J",
+    "sqm": "164 - 170",
+    "bedrooms": "3",
+    "bathrooms": null,
+    "unitType": "Townhouse",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/T-J-113052025181927.webp",
+    "top": "66",
+    "left": "36",
+    "imageFile": "T-J-113052025181927-d943f1.webp"
+   },
+   {
+    "name": "SMART APARTMENTS",
+    "sqm": "94 - 148",
+    "bedrooms": "2 - 3",
+    "bathrooms": null,
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/APT-113052025185350.webp",
+    "top": "76",
+    "left": "34",
+    "imageFile": "APT-113052025185350-722ace.webp"
+   }
+  ],
+  "logoFile": "parkside-logo08052025170951-copy1908202615050123-a0ac8d.webp",
+  "galleryFiles": [
+   "park-card08052025171051-9854c6.webp",
+   "park-card08052025171051-9854c6.webp"
+  ]
+ },
+ {
+  "slug": "spring-valley",
+  "name": "Spring Valley",
+  "description": "Spring Valley Villas offers the perfect home with peace, luxury, beauty, and convenience. Choose from mansions, standalone villas, twin houses, and townhouses.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/spring11022025194642.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20spring%20d14022025180230.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511%20%284%2914022025180233.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/SpringValley_11zon19082026153221.pdf",
+  "units": [],
+  "logoFile": "spring11022025194642-2f9850.webp",
+  "galleryFiles": [
+   "card-spring-d14022025180230-c5923c.jpg",
+   "card-m09022025114511-414022025180233-0b8030.jpg"
+  ]
+ },
+ {
+  "slug": "tulwa",
+  "name": "Tulwa",
+  "description": "Tulwa offers a pedestrian only neighborhood with lush greenery, biking paths, privacy, and easy access to outdoor activities, shopping, and amenities.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/Tulwaa11022025200107.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20tulwa%20d13022025152036.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511%20%283%2913022025152037.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Tulwa_11zon19082026153815.pdf",
+  "units": [
+   {
+    "name": "Type A Façade Mirrored",
+    "sqm": "147",
+    "bedrooms": "2",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/A%20F115022025005255.png",
+    "top": "67",
+    "left": "37",
+    "imageFile": "A-F115022025005255-669a9e.png"
+   },
+   {
+    "name": "Type B Façade",
+    "sqm": "261",
+    "bedrooms": "Loft",
+    "bathrooms": "-",
+    "unitType": "Loft",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/b%20115022025005834.jpg",
+    "top": "60",
+    "left": "55",
+    "imageFile": "b-115022025005834-0cf028.jpg"
+   },
+   {
+    "name": "Type B Façade Mirrored",
+    "sqm": "147 - 174",
+    "bedrooms": "2 - 3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/b%20m115022025010101.jpg",
+    "top": "72",
+    "left": "58",
+    "imageFile": "b-m115022025010101-8b17d9.jpg"
+   },
+   {
+    "name": "Type C Facade Mirrored",
+    "sqm": "170 - 196",
+    "bedrooms": "3 + Nanny",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/c2%20%285%2915022025011422.jpg",
+    "top": "58",
+    "left": "54",
+    "imageFile": "c2-515022025011422-3bf826.jpg"
+   },
+   {
+    "name": "Type F",
+    "sqm": "155 - 287",
+    "bedrooms": "2 -  Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/f%20115022025011941.jpg",
+    "top": "64",
+    "left": "49",
+    "imageFile": "f-115022025011941-baaf48.jpg"
+   },
+   {
+    "name": "Type G",
+    "sqm": "148 - 287",
+    "bedrooms": "2 -  Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/ggg115022025014900.jpg",
+    "top": "76",
+    "left": "54",
+    "imageFile": "ggg115022025014900-87be04.jpg"
+   },
+   {
+    "name": "Type H",
+    "sqm": "267 - 277",
+    "bedrooms": "3 + Nanny",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/hh115022025015657.jpg",
+    "top": "69",
+    "left": "57",
+    "imageFile": "hh115022025015657-a779df.jpg"
+   },
+   {
+    "name": "Type I",
+    "sqm": "150 - 238",
+    "bedrooms": "2 -  Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "58",
+    "left": "52",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type I Mirrored",
+    "sqm": "150",
+    "bedrooms": "2",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "58",
+    "left": "50",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type J",
+    "sqm": "142 - 310",
+    "bedrooms": "2 - 4 Penthouse",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/j1115022025021234.jpg",
+    "top": "74",
+    "left": "43",
+    "imageFile": "j1115022025021234-757e90.jpg"
+   },
+   {
+    "name": "Type K",
+    "sqm": "143 - 144",
+    "bedrooms": "2",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/k1115022025021718.jpg",
+    "top": "64",
+    "left": "56",
+    "imageFile": "k1115022025021718-b088d5.jpg"
+   },
+   {
+    "name": "Type L",
+    "sqm": "149 - 258",
+    "bedrooms": "2 -  Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": null,
+    "top": "74",
+    "left": "56",
+    "imageFile": null
+   },
+   {
+    "name": "Type L Mirrored",
+    "sqm": "149 - 258",
+    "bedrooms": "2 + Maid - Duplex",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": null,
+    "top": "67",
+    "left": "45",
+    "imageFile": null
+   },
+   {
+    "name": "Type M",
+    "sqm": "193 - 194",
+    "bedrooms": "3 + Nanny",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "76",
+    "left": "50",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type M Mirrored",
+    "sqm": "135 - 194",
+    "bedrooms": "2 - 3 + Nanny",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "65",
+    "left": "46",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type N",
+    "sqm": "181",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "66",
+    "left": "43",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type O Facade A",
+    "sqm": "116",
+    "bedrooms": "2",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "57",
+    "left": "47",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type O Façade B Mirrored",
+    "sqm": "133",
+    "bedrooms": "3",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "65",
+    "left": "45",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   },
+   {
+    "name": "Type R",
+    "sqm": "120",
+    "bedrooms": "2",
+    "bathrooms": "-",
+    "unitType": "Apartments",
+    "image": "https://assets.live.beyond-creation.net/owest/media/library/tul18022025145538.jpg",
+    "top": "76",
+    "left": "55",
+    "imageFile": "tul18022025145538-10ebf2.jpg"
+   }
+  ],
+  "logoFile": "Tulwaa11022025200107-617594.webp",
+  "galleryFiles": [
+   "card-tulwa-d13022025152036-efb6dd.jpg",
+   "card-m09022025114511-313022025152037-2034de.jpg"
+  ]
+ },
+ {
+  "slug": "whyt",
+  "name": "Whyt",
+  "description": "Whyt villas, twin houses, and townhouses offer serenity, lush greenery, and world class design, surrounded by pristine landscapes and just steps from O West life.",
+  "logo": "https://assets.live.beyond-creation.net/owest/media/library/whyt11022025200922.webp",
+  "gallery": [
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20WHTY%20d13022025144302.jpg",
+   "https://assets.live.beyond-creation.net/owest/media/library/card%20m09022025114511%20%282%2913022025144304.jpg"
+  ],
+  "brochure": "https://assets.live.beyond-creation.net/owest/media/library/Whyt_11zon%20%281%2919082026153050.pdf",
+  "units": [],
+  "logoFile": "whyt11022025200922-1befab.webp",
+  "galleryFiles": [
+   "card-WHTY-d13022025144302-cd73f0.jpg",
+   "card-m09022025114511-213022025144304-962bb9.jpg"
+  ]
+ }
+]

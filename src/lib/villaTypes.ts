@@ -9,6 +9,15 @@ import config from "@payload-config";
 // Content only. Availability is the CRM's answer and is joined in the API route, which is
 // what lets a photo change without touching Salesforce and a unit sell without a deploy.
 
+export type VillaTypeVariant = {
+  name: string;
+  unitType?: string;
+  sizeText?: string;
+  bedroomsText?: string;
+  bathroomsText?: string;
+  imageUrl?: string;
+};
+
 export type VillaType = {
   /** Join key — equals Unit__c.Villa_Type__c in the project's CRM. */
   code: string;
@@ -16,10 +25,15 @@ export type VillaType = {
   area: string;
   /** As buyers see it. NOT unique: LMD sells two "Town Casa" at different sizes. */
   name: string;
-  areaSqm: number;
-  bedroomsText: string;
+  /** Present when the zone is a single product (Zoya); absent for a neighbourhood (O West). */
+  areaSqm?: number;
+  bedroomsText?: string;
   imageUrl?: string;
+  logoUrl?: string;
   description?: string;
+  brochureUrl?: string;
+  /** Unit designs inside a neighbourhood-scale zone. */
+  variants?: VillaTypeVariant[];
   /** Outline on the masterplan, [[lng, lat], …]. Absent until someone draws it. */
   polygon?: [number, number][];
 };
@@ -30,10 +44,13 @@ type VillaTypeDoc = {
   code: string;
   area: string;
   name: string;
-  areaSqm: number;
-  bedroomsText: string;
+  areaSqm?: number | null;
+  bedroomsText?: string | null;
   image?: AssetDoc;
+  logo?: AssetDoc;
   description?: string | null;
+  brochureUrl?: string | null;
+  variants?: { name: string; unitType?: string | null; sizeText?: string | null; bedroomsText?: string | null; bathroomsText?: string | null; image?: AssetDoc }[] | null;
   polygon?: unknown;
   project?: { slug?: string | null } | number | null;
 };
@@ -75,10 +92,20 @@ export async function listVillaTypes(projectSlug: string): Promise<VillaType[]> 
       code: d.code,
       area: d.area,
       name: d.name,
-      areaSqm: d.areaSqm,
-      bedroomsText: d.bedroomsText,
+      areaSqm: d.areaSqm ?? undefined,
+      bedroomsText: d.bedroomsText ?? undefined,
       imageUrl: imageUrl(d.image),
+      logoUrl: imageUrl(d.logo),
       description: d.description ?? undefined,
+      brochureUrl: d.brochureUrl ?? undefined,
+      variants: (d.variants ?? []).map((v) => ({
+        name: v.name,
+        unitType: v.unitType ?? undefined,
+        sizeText: v.sizeText ?? undefined,
+        bedroomsText: v.bedroomsText ?? undefined,
+        bathroomsText: v.bathroomsText ?? undefined,
+        imageUrl: imageUrl(v.image),
+      })),
       polygon: toPolygon(d.polygon),
     }));
 }
