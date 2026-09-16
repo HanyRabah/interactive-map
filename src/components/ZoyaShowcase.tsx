@@ -2562,8 +2562,12 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                     </div>
                     <div className="mt-1.5 flex items-center gap-3">
                       {t.logoUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.logoUrl} alt="" className="h-7 w-auto max-w-[6rem] object-contain" />
+                        // On a white chip: neighbourhood logos are supplied as dark artwork
+                        // for the developer's own light pages, and vanished on this card.
+                        <span className="inline-flex shrink-0 items-center rounded-md bg-white px-2 py-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={t.logoUrl} alt="" className="h-6 w-auto max-w-[6rem] object-contain" />
+                        </span>
                       )}
                       <div className="text-[22px] leading-tight text-[#f5f3ee]">{t.name}</div>
                     </div>
