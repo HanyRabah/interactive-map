@@ -2157,7 +2157,9 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
               onClick={() => setSwitcherOpen((v) => !v)}
               className="rounded-full border border-white/15 bg-[#0a1614]/90 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/40"
             >
-              {brand.name} Projects {switcherOpen ? "▴" : "▾"}
+              {/* Just "Projects": the client's name is already the wordmark beside it, and
+                  "O West Projects" read as if O West were the developer, not the site. */}
+              Projects {switcherOpen ? "▴" : "▾"}
             </button>
           </div>
 
