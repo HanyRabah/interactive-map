@@ -29,6 +29,8 @@ export type VillaType = {
   areaSqm?: number;
   bedroomsText?: string;
   imageUrl?: string;
+  /** Floor/unit plan render, shown behind a "View plan" toggle instead of the hero image. */
+  planImageUrl?: string;
   logoUrl?: string;
   description?: string;
   brochureUrl?: string;
@@ -47,6 +49,7 @@ type VillaTypeDoc = {
   areaSqm?: number | null;
   bedroomsText?: string | null;
   image?: AssetDoc;
+  planImage?: AssetDoc;
   logo?: AssetDoc;
   description?: string | null;
   brochureUrl?: string | null;
@@ -63,14 +66,26 @@ function imageUrl(asset: AssetDoc): string | undefined {
   return undefined;
 }
 
+/** A point as saved comes back as a real [lng, lat] tuple normally, but the Postgres jsonb
+ *  column round-trips it as {"0": lng, "1": lat} instead — observed on points saved through
+ *  the in-app draw tool, cause not pinned down. Accept both shapes rather than silently
+ *  treating every already-traced zone as untraced. */
+function toPoint(p: unknown): [number, number] | undefined {
+  if (Array.isArray(p) && p.length === 2 && typeof p[0] === "number" && typeof p[1] === "number") {
+    return [p[0], p[1]];
+  }
+  if (p && typeof p === "object" && typeof (p as Record<string, unknown>)["0"] === "number" && typeof (p as Record<string, unknown>)["1"] === "number") {
+    const o = p as Record<string, number>;
+    return [o["0"], o["1"]];
+  }
+  return undefined;
+}
+
 /** Only a closed ring of [lng, lat] pairs is usable as a map polygon; anything else is
  *  treated as "not drawn yet" rather than crashing the layer that renders it. */
 function toPolygon(value: unknown): [number, number][] | undefined {
   if (!Array.isArray(value) || value.length < 3) return undefined;
-  const ring = value.filter(
-    (p): p is [number, number] =>
-      Array.isArray(p) && p.length === 2 && typeof p[0] === "number" && typeof p[1] === "number"
-  );
+  const ring = value.map(toPoint).filter((p): p is [number, number] => p !== undefined);
   return ring.length >= 3 ? ring : undefined;
 }
 
@@ -95,6 +110,7 @@ export async function listVillaTypes(projectSlug: string): Promise<VillaType[]> 
       areaSqm: d.areaSqm ?? undefined,
       bedroomsText: d.bedroomsText ?? undefined,
       imageUrl: imageUrl(d.image),
+      planImageUrl: imageUrl(d.planImage),
       logoUrl: imageUrl(d.logo),
       description: d.description ?? undefined,
       brochureUrl: d.brochureUrl ?? undefined,

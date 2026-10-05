@@ -377,6 +377,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     area: string;
     bedroomsText?: string;
     imageUrl?: string;
+    planImageUrl?: string;
     logoUrl?: string;
     description?: string;
     brochureUrl?: string;
@@ -395,6 +396,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
   // appeared and vanished as the cursor crossed the masterplan was unreadable, and you could
   // not move toward it without losing it.
   const [openZone, setOpenZone] = useState<string | null>(null);
+  // Card shows the hero render by default; toggled to the floor/unit plan and back by the
+  // "View plan" button. Reset whenever the open zone changes so the next card never opens
+  // mid-plan by accident.
+  const [showPlan, setShowPlan] = useState(false);
+  useEffect(() => setShowPlan(false), [openZone]);
   // Only the tooltip's *content* is state; its position is set imperatively above.
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   // Which villa type the ?tools=1 polygon tool is currently tracing, if any.
@@ -2540,11 +2546,29 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                   className="w-full max-w-[26rem] overflow-hidden rounded-3xl border border-white/12 bg-[#0a1614]/97 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.95)]"
                 >
                   <div className="relative">
-                    {t.imageUrl && (
+                    {(showPlan && t.planImageUrl ? t.planImageUrl : t.imageUrl) && (
                       // Plain <img>: a Blob-hosted render at one fixed card width, so
-                      // next/image's resizing buys nothing and its loader adds a hop.
+                      // next/image's resizing buys nothing and its loader adds a hop. The plan
+                      // is a line drawing, not a photo — contain + a solid ground so it never
+                      // crops into illegibility the way object-cover would.
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.imageUrl} alt={t.name} className="h-56 w-full object-cover" />
+                      <img
+                        src={showPlan && t.planImageUrl ? t.planImageUrl : t.imageUrl}
+                        alt={showPlan ? `${t.name} — floor plan` : t.name}
+                        className={showPlan ? "h-56 w-full bg-[#0a1614] object-contain p-2" : "h-56 w-full object-cover"}
+                      />
+                    )}
+                    {t.planImageUrl && (
+                      <button
+                        onClick={() => setShowPlan((v) => !v)}
+                        className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-[#07110f]/85 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#f5f3ee] backdrop-blur transition-colors hover:border-white/50"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="3" y="3" width="18" height="18" rx="1.5" />
+                          <path d="M3 15h18M9 3v18" />
+                        </svg>
+                        {showPlan ? "View photo" : "View plan"}
+                      </button>
                     )}
                     <button
                       onClick={() => setOpenZone(null)}
@@ -2674,8 +2698,11 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
           })()}
 
           {/* Live availability, straight from the CRM (mock or the client's real Salesforce
-              org) — the "I marked it sold and the map changed" moment. */}
-          {clusterAvailability && clusterAvailability.length > 0 && (
+              org) — the "I marked it sold and the map changed" moment.
+              ponytail: ilcazar asked this panel hidden on their masterplan; a brand-slug check
+              rather than a CMS field since it's a single client's ask, not a toggle anyone
+              else needs yet — add a per-project flag if a second client wants this too. */}
+          {brand.slug !== "ilcazar" && clusterAvailability && clusterAvailability.length > 0 && (
             <div className="absolute right-5 top-32 z-10 flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-[#0a1614]/90 px-4 py-3 backdrop-blur">
               <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8fa69e]">Availability</span>
               {clusterAvailability.map((c) => (

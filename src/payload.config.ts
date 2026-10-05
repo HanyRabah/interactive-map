@@ -131,6 +131,7 @@ export default buildConfig({
           ],
         },
         { name: "image", type: "upload", relationTo: "assets", admin: { description: "The render shown on the card." } },
+        { name: "planImage", type: "upload", relationTo: "assets", admin: { description: "Optional floor/unit plan — swapped in behind a 'View plan' toggle on the card." } },
         { name: "logo", type: "upload", relationTo: "assets", admin: { description: "Optional — some developers brand each neighbourhood." } },
         { name: "description", type: "textarea" },
         { name: "brochureUrl", type: "text", admin: { description: "Optional PDF, offered from the card." } },

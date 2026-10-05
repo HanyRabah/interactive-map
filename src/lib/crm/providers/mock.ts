@@ -107,10 +107,56 @@ const OWEST_SEEDS: ClusterSeed[] = [
   { cluster: "Whyt", villaType: "owest-whyt", count: 48, bedrooms: 3, areaSqm: 200, priceFrom: 12000000, currency: "EGP", availableRate: 0.00, reservedRate: 0.00 },
 ];
 
+// The Crest (il Cazar, New Cairo): one zone per unit category the developer actually sells
+// (ilcazar.com/the-crest/) — bedroom counts are theirs, sizes/prices/availability are demo.
+//
+// Each category sits on several separate plots on the real masterplan, not one blob, so it's
+// addressed as 10 villaType codes ("-01".."-10", matching scripts/seed-ilcazar.mjs's CMS docs)
+// each carrying its own slice of the category's stock. All 10 share one `cluster` label, so
+// rollUpClusters (the "Availability" panel) sums them back into a single row per category —
+// the split is only visible on the masterplan, as separate traceable shapes.
+function splitCount(total: number, addresses: number): number[] {
+  const base = Math.floor(total / addresses);
+  const remainder = total - base * addresses;
+  return Array.from({ length: addresses }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+function addressedSeeds(
+  cluster: string,
+  codePrefix: string,
+  totalCount: number,
+  bedrooms: number,
+  areaSqm: number,
+  priceFrom: number,
+  availableRate: number,
+  reservedRate: number
+): ClusterSeed[] {
+  return splitCount(totalCount, 10).map((count, i) => ({
+    cluster,
+    villaType: `${codePrefix}-${String(i + 1).padStart(2, "0")}`,
+    count,
+    bedrooms,
+    areaSqm,
+    priceFrom,
+    currency: "EGP",
+    availableRate,
+    reservedRate,
+  }));
+}
+
+const CREST_SEEDS: ClusterSeed[] = [
+  ...addressedSeeds("The Signature Ville", "ilcazar-crest-signature-ville", 24, 3, 280, 9500000, 0.45, 0.2),
+  ...addressedSeeds("CrestVille", "ilcazar-crest-crestville", 40, 4, 350, 14000000, 0.35, 0.25),
+  ...addressedSeeds("Crestonia", "ilcazar-crest-crestonia", 56, 3, 230, 8200000, 0.5, 0.2),
+  ...addressedSeeds("Crestside", "ilcazar-crest-crestside", 48, 3, 210, 7400000, 0.55, 0.15),
+  ...addressedSeeds("Crestfield", "ilcazar-crest-crestfield", 72, 3, 180, 5600000, 0.4, 0.3),
+];
+
 const SEEDS_BY_PROJECT: Record<string, ClusterSeed[]> = {
   zoya: ZOYA_SEEDS,
   "zoya-ghazala-bay": ZOYA_SEEDS,
   "o-west": OWEST_SEEDS,
+  "the-crest": CREST_SEEDS,
 };
 
 // Shortlists live in a plain in-memory map — replaces itself on server restart, which
