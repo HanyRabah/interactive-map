@@ -16,7 +16,14 @@
 // zone are the developer's own published figures.
 //
 // The Crest's masterplanParams were fitted in-app against Mapbox satellite imagery
-// (?tools=1 → Adjust position → Copy config).
+// (?tools=1 → Adjust position → Copy config) — for the ORIGINAL masterplan.jpg (aspect
+// ~1.41, from ilcazar.com). masterplan-oct2026.png (Oct 2026 client-supplied render,
+// content cropped to aspect ~2.79 — a much tighter crop around the plot, alpha-masked to
+// its real slanted boundary) is a different drawing of the same site: widthMeters here is
+// carried over as a same-scale starting guess with heightMeters rescaled to the new
+// aspect, rotation/offset left as-is since the site itself hasn't moved — but none of this
+// is re-fitted yet. Re-open ?tools=1 → Adjust position after this seed and correct it
+// against satellite for real; the 20 zones already traced may need a visual recheck too.
 
 import { readFile } from "node:fs/promises";
 
@@ -28,8 +35,9 @@ const DEVELOPER = "il Cazar Developments";
 
 // Google Maps pin for the project's own listing.
 const THE_CREST = { lng: 31.5418677, lat: 29.9609591 };
-// Fitted in-app against Mapbox satellite (?tools=1 → Adjust position → Copy config).
-const MASTERPLAN = { widthMeters: 1392, heightMeters: 986, rotationDeg: 58, offsetE: 175, offsetN: 205 };
+// Unverified starting guess for masterplan-oct2026.png — see note above. Not fitted against
+// satellite yet.
+const MASTERPLAN = { widthMeters: 1392, heightMeters: 499, rotationDeg: 58, offsetE: 175, offsetN: 205 };
 
 const POIS = [
   { name: "American University in Cairo", category: "school", lng: 31.4984253, lat: 30.0231678 },
@@ -190,7 +198,10 @@ async function main() {
   const logo = await upload("public/brand/ilcazar-logo-white.png", "il Cazar Developments lockup (white)");
   const client = await upsert("clients", "slug", "ilcazar", { slug: "ilcazar", name: "il Cazar Developments", logo: logo.id });
 
-  const masterplan = await upload("public/media/ilcazar/masterplan.jpg", "The Crest masterplan (ilcazar.com)");
+  // The ilcazar.com-scraped render stays uploaded (unreferenced) rather than deleted — a
+  // one-line revert (swap masterplanImage back to it) if the new client render needs rework.
+  await upload("public/media/ilcazar/masterplan.jpg", "The Crest masterplan (ilcazar.com) — superseded, kept for revert");
+  const masterplan = await upload("public/media/ilcazar/masterplan-oct2026.png", "The Crest masterplan (client, Oct 2026)");
   const crest = await upsert("projects", "slug", "the-crest", {
     slug: "the-crest",
     name: "The Crest",
