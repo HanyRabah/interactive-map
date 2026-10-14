@@ -40,6 +40,7 @@ type ProjectDoc = {
   pointsOfInterest?: { name?: string | null; category?: string | null; lng?: number | null; lat?: number | null }[] | null;
   virtualTourUrl?: string | null;
   galleryUrl?: string | null;
+  beforeAfterUrl?: string | null;
   film?: AssetDoc;
   filmUrl?: string | null;
   crm?: {
@@ -156,6 +157,7 @@ function toProject(doc: ProjectDoc): Project {
     pointsOfInterest: toPois(doc),
     virtualTourUrl: doc.virtualTourUrl || undefined,
     galleryUrl: doc.galleryUrl || undefined,
+    beforeAfterUrl: doc.beforeAfterUrl || undefined,
     // The explicit URL wins: it exists precisely because the file was too big for the
     // uploader, so a stale asset relation must not shadow it.
     filmUrl: doc.filmUrl || assetUrl(doc.film),

@@ -295,6 +295,11 @@ export default buildConfig({
           admin: { description: "Full URL of the photo gallery (Pic-Time, etc). Opens in a new tab." },
         },
         {
+          name: "beforeAfterUrl",
+          type: "text",
+          admin: { description: "Full URL of a before/after construction-progress slider. Opens in a new tab." },
+        },
+        {
           name: "film",
           // Stored as `film`; shown as Video. Renaming the column to match a label would be
           // a migration that buys nothing.

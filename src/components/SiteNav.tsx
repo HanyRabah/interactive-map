@@ -36,7 +36,8 @@ export type NavIcon =
   | "film"
   | "gallery"
   | "enquire"
-  | "brochure";
+  | "brochure"
+  | "compare";
 
 // Drawn at 24 on a 24 grid, single 1.5 stroke, so they read as one set at 18px. No glyphs,
 // no emoji — those break the moment the rail sits on a bright patch of the masterplan.
@@ -61,6 +62,8 @@ const ICONS: Record<NavIcon, string> = {
   brochure: '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/><path d="M9 12h6M9 15.5h6"/>',
   // Envelope.
   enquire: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.6 7 7.3 5.4a2 2 0 0 0 2.2 0L20.4 7"/>',
+  // Split frame with a drag handle — before/after.
+  compare: '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M12 5v14"/><path d="m9.3 10.8-1.6 1.2 1.6 1.2"/><path d="m14.7 10.8 1.6 1.2-1.6 1.2"/>',
 };
 
 // Exported so the villa popup can use the same drawn set — a second icon vocabulary for the
@@ -96,6 +99,7 @@ export type SiteNavProps = {
   virtualTourUrl?: string;
   filmUrl?: string;
   galleryUrl?: string;
+  beforeAfterUrl?: string;
   onOverview: () => void;
   onOpenMasterplan: () => void;
   onToggleMode: () => void;
@@ -145,6 +149,7 @@ function buildNavItems(opts: SiteNavProps): NavItem[] {
   if (opts.virtualTourUrl) media.push({ id: "tour", label: "Virtual tour", icon: "tour", href: opts.virtualTourUrl });
   if (opts.filmUrl) media.push({ id: "film", label: "Video", icon: "film", onSelect: opts.onFilm });
   if (opts.galleryUrl) media.push({ id: "gallery", label: "Gallery", icon: "gallery", href: opts.galleryUrl });
+  if (opts.beforeAfterUrl) media.push({ id: "compare", label: "Before / after", icon: "compare", href: opts.beforeAfterUrl });
   if (media.length > 0) {
     media[0].startsGroup = items.length > 0;
     items.push(...media);

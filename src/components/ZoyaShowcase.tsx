@@ -2389,6 +2389,7 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
             virtualTourUrl: activeProject.virtualTourUrl,
             filmUrl: activeProject.filmUrl,
             galleryUrl: activeProject.galleryUrl,
+            beforeAfterUrl: activeProject.beforeAfterUrl,
             hasNearby: stage === "hero" && (activeProject.pointsOfInterest?.length ?? 0) > 0,
             nearbyOpen,
             onNearby: () => setNearbyOpen((v) => !v),

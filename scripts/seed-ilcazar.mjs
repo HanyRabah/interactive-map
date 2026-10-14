@@ -204,6 +204,9 @@ async function main() {
     masterplanImage: masterplan.id,
     masterplanParams: MASTERPLAN,
     pointsOfInterest: POIS,
+    virtualTourUrl: "https://www.dpproductions.net/VT/ILCAZAR-TheCrest-OCT2026/",
+    galleryUrl: "https://dpproductions.pic-time.com/client/il-cazar-the-crest-oct-2026/gallery?invitePToken2=AAAAAK4AAADkGGb9k7BvINjE60NV-ri0uSXT",
+    beforeAfterUrl: "https://www.dpproductions.net/image-sliders/TheCrest-OCT2026-MAY2025/",
     crm: { provider: "mock" },
     order: 1,
   });

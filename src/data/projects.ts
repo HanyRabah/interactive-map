@@ -88,6 +88,8 @@ export type Project = {
   virtualTourUrl?: string;
   /** External photo gallery. The rail hides its entry when absent. */
   galleryUrl?: string;
+  /** External before/after construction-progress slider. The rail hides its entry when absent. */
+  beforeAfterUrl?: string;
   /** Project film, served from the CDN and played in an overlay. */
   filmUrl?: string;
 };
