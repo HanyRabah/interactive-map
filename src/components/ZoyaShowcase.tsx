@@ -1838,6 +1838,30 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
     }
   }
 
+  // Clears a wrongly-traced outline — same POST the save path uses, with an empty polygon,
+  // which /api/villa-types already treats as "forget this shape" rather than "nothing sent".
+  async function deleteZonePolygon(code: string) {
+    const name = villaTypes.find((t) => t.code === code)?.name ?? code;
+    if (!window.confirm(`Delete the traced outline for "${name}"? This can't be undone.`)) return;
+    setZoneSaveNotice("Deleting…");
+    try {
+      const res = await fetch("/api/villa-types", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, polygon: [], secret: toolsKeyRef.current }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const fresh = await fetch(`/api/villa-types?projectId=${activeProjectId}`, { cache: "no-store" });
+      const data = (await fresh.json()) as { villaTypes?: VillaTypeCard[] };
+      if (Array.isArray(data.villaTypes)) setVillaTypes(data.villaTypes);
+      setZoneSaveNotice("Outline deleted");
+    } catch (err) {
+      setZoneSaveNotice(`Delete failed: ${String(err).slice(0, 80)}`);
+    } finally {
+      window.setTimeout(() => setZoneSaveNotice(null), 4000);
+    }
+  }
+
   // The one way back to the globe from anywhere in the journey. backToOverview() only pulls
   // out to the *same* project's hero framing; this leaves the project entirely — tearing down
   // its site-specific layers and restoring the night-globe intro look the split stage expects
@@ -2477,13 +2501,44 @@ export default function ZoyaShowcase({ brand = LMD_BRAND }: { brand?: ClientBran
                     .map((t) => (
                       <button
                         key={t.code}
+                        id={`zone-row-${t.code}`}
                         onClick={() => startZoneDraw(t.code)}
-                        className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-[#f5f3ee] hover:bg-white/10"
+                        // Clicking the zone's shape on the masterplan sets openZone (it opens
+                        // the buyer-facing card too — that's unchanged); this just gives the
+                        // row the same highlight so tracing fifty lookalike rows stays
+                        // orientable when you're not sure which one you just clicked.
+                        className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-[#f5f3ee] hover:bg-white/10 ${
+                          openZone === t.code ? "bg-white/10 ring-1 ring-inset" : ""
+                        }`}
+                        style={openZone === t.code ? { boxShadow: `inset 0 0 0 1px ${ACCENT}` } : undefined}
                       >
                         <span className="truncate">
                           {t.name}
                           {t.areaSqm ? <span className="text-[#8fa69e]"> {t.areaSqm}m²</span> : null}
                         </span>
+                        {t.polygon && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            title={`Delete outline — ${t.name}`}
+                            aria-label={`Delete outline for ${t.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteZonePolygon(t.code);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.stopPropagation();
+                                deleteZonePolygon(t.code);
+                              }
+                            }}
+                            className="shrink-0 rounded p-1 text-[#8fa69e] hover:bg-white/10 hover:text-[#e08a7d]"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m2 0v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7" />
+                            </svg>
+                          </span>
+                        )}
                         <span
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
                           style={{ backgroundColor: t.polygon ? ACCENT : "#3a4a46" }}
